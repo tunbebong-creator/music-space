@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Manager Dashboard – Music Space</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="/assets/manager-dashboard.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="h1">Bảng điều khiển (Manager)</div>
+      <a class="back" href="/pages/healing-space.html">← Quay lại</a>
+    </div>
+
+    <div class="grid">
+      <!-- Sự kiện -->
+      <section class="card">
+        <h3>Sự kiện đang quản lý</h3>
+        <div class="kpi-wrap">
+          <div class="muted">Tổng:</div>
+          <div class="kpi-dot" id="kpi-events">—</div>
+          <div class="toolbar">
+            <a class="btn" href="/pages/manager/events.html">📋 Xem tất cả</a>
+            <a class="btn primary" href="/pages/manager/event-new.html">➕ Tạo sự kiện</a>
+            <a class="btn" href="/pages/manager/bookings.html">🎟 Quản lý vé</a>
+          </div>
+        </div>
+
+        <!-- danh sách sự kiện gần đây -->
+        <div id="events-recent" class="list">
+          <div class="muted">Đang tải...</div>
+        </div>
+      </section>
+
+      <!-- Không gian -->
+      <section class="card">
+        <h3>Không gian</h3>
+        <div class="stats">
+          <div class="circle"><span id="spaceCount">0</span></div>
+          <button onclick="window.location.href='/pages/manager/spaces.html'" class="btn btn-space">
+            📍 Quản lý không gian đã xác nhận hợp tác
+          </button>
+        </div>
+        <p class="muted">
+          Quản lý danh sách không gian đã được duyệt/đồng ý hợp tác (dùng để tổ chức sự kiện).
+        </p>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:18px">
+      <h3>Người dùng</h3>
+      <div class="kpi-wrap">
+        <div class="muted">Tổng:</div>
+        <div class="kpi-dot" id="kpi-users">—</div>
+        <div class="toolbar">
+          <a class="btn" href="/pages/manager/users.html">👥 Quản lý người dùng</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API = '/api/manager';
+
+    // Guard
+    const u = JSON.parse(localStorage.getItem('ms_user') || 'null');
+    if (!u || !['manager','admin'].includes((u.role||'').toLowerCase())) {
+      window.location.href = '/index.html#login';
+    }
+    const H = { 'x-user-id': u.id, 'x-user-role': u.role };
+
+    (async () => {
+      try {
+        // Lấy KPI cơ bản và toàn bộ events (dùng để đếm + recent)
+        const [kpiRes, eventsRes] = await Promise.all([
+          fetch(`${API}/kpi`, { headers: H }),
+          fetch(`${API}/events`, { headers: H })
+        ]);
+        const kpi = await kpiRes.json();
+        const list = await eventsRes.json();
+
+        // KPI
+        document.getElementById('kpi-events').textContent = list?.length ?? 0;
+        document.getElementById('spaceCount').textContent = kpi?.spaces ?? 0;
+        document.getElementById('kpi-users').textContent  = kpi?.users ?? 0;
+
+        // Recent 3
+        const recent = (list||[])
+          .sort((a,b) => new Date(b.StartTime||b.EndTime||0) - new Date(a.StartTime||a.EndTime||0))
+          .slice(0,3);
+
+        const wrap = document.getElementById('events-recent');
+        if (!recent.length) {
+          wrap.innerHTML = '<div class="muted">Chưa có sự kiện.</div>';
+          return;
+        }
+        wrap.innerHTML = recent.map(ev => {
+          const d = ev.StartTime ? new Date(ev.StartTime).toLocaleDateString('vi-VN') : '';
+          const t = ev.StartTime ? new Date(ev.StartTime).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}) : '';
+          return `
+            <article class="mini-card">
+              ${ev.ThumbnailUrl ? `<img src="${ev.ThumbnailUrl}" class="thumb" alt="">` : ''}
+              <div class="info">
+                <div class="title">${ev.Title || ''}</div>
+                <div class="muted">${ev.City ? `📍 ${ev.City} · ` : ''}${d} ${t}</div>
+              </div>
+              ${ev.Slug ? `<a class="btn small" href="/pages/event.html?slug=${ev.Slug}">Xem</a>` : ''}
+            </article>
+          `;
+        }).join('');
+      } catch (e) {
+        console.warn(e);
+        document.getElementById('events-recent').innerHTML = '<div class="muted">Không tải được dữ liệu.</div>';
+      }
+    })();
+  </script>
+</body>
+</html>

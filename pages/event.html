@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chi tiết sự kiện • Music Space</title>
+
+  <!-- Base site styles -->
+  <link rel="stylesheet" href="/assets/style.css" />
+  <!-- Trang event -->
+  <link rel="stylesheet" href="/assets/event.css" />
+  <!-- Modal đặt vé -->
+  <link rel="stylesheet" href="/assets/booking.css" />
+
+  <!-- Leaflet (chỉ dùng nếu có Lat/Lng để hiển thị mini map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<body>
+  <!-- NAV -->
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a class="brand" href="/index.html">
+        <span class="logo">❤</span>
+        <span><strong>Music</strong> <span class="space">Space</span></span>
+      </a>
+      <div class="nav-links">
+        <a href="#" class="chip">✨ I'm Healing</a>
+        <a href="/pages/healing-space.html" class="chip">🗺 Healing Space</a>
+        <a href="#" class="chip">👥 We Share</a>
+        <a href="#" class="chip">📖 We Read</a>
+      </div>
+      <div class="nav-actions">
+        <button class="icon-btn">🔈</button>
+        <div class="user-box">
+          <button class="icon-btn" id="btnUser">👤</button>
+          <div id="user-info"></div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page">
+    <a class="back" href="javascript:history.back()">← Quay lại</a>
+
+    <section class="event-card" id="event-card" hidden>
+      <div class="hero">
+        <img id="ev-cover" class="cover" alt="">
+        <div>
+          <div class="tags" id="ev-tags"></div>
+          <div class="title" id="ev-title">—</div>
+
+          <div class="facts">
+            <div class="fact"><span class="icon">📅</span><span id="ev-date">—</span></div>
+            <div class="fact"><span class="icon">⏱</span><span id="ev-time">—</span></div>
+            <div class="fact"><span class="icon">📍</span><span id="ev-venue">—</span></div>
+            <div class="fact"><span class="icon">👥</span><span id="ev-capacity" class="muted">—</span></div>
+            <div class="fact"><span class="icon">🏷️</span><span id="ev-price" class="price">—</span></div>
+          </div>
+
+          <button id="btnBook" class="cta-btn">Đặt vé ngay</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Mô tả sự kiện</h3>
+        <div id="ev-desc" class="muted">—</div>
+      </div>
+
+      <div class="section">
+        <h3>Lợi ích tham gia</h3>
+        <div id="ev-benefits" class="ul"></div>
+      </div>
+
+      <div class="section">
+        <h3>Yêu cầu tham gia</h3>
+        <div id="ev-reqs" class="ul"></div>
+      </div>
+
+      <div class="section">
+        <h3>Bản đồ</h3>
+        <div id="map"></div>
+      </div>
+    </section>
+
+    <section class="section" id="empty">
+      <p class="muted">Đang tải sự kiện...</p>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <div class="brand-footer">
+          <span class="logo">❤</span>
+          <div>
+            <div class="brand-text"><strong>Music</strong> <span class="space">Space</span></div>
+            <p class="tagline">Vietnam's Healing Music Map</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="copyright">© 2025 Music Space. All rights reserved.</div>
+  </footer>
+
+  <!-- Booking Modal -->
+  <div id="book-modal" class="ms-modal hidden" aria-hidden="true">
+    <div class="ms-modal__backdrop" data-close></div>
+    <div class="ms-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="book-title">
+      <div class="ms-modal__header">
+        <h3 id="book-title">Chọn phương thức thanh toán</h3>
+        <button class="ms-modal__close" title="Đóng" data-close>×</button>
+      </div>
+
+      <div class="ms-modal__body">
+        <div class="pay-options">
+          <button id="btnCash" class="pay-option">
+            <span class="emoji">💵</span>
+            <div>
+              <div class="t">Thanh toán tiền mặt</div>
+              <div class="d">Điền thông tin, thanh toán tại sự kiện</div>
+            </div>
+          </button>
+
+          <button id="btnOnline" class="pay-option disabled" disabled>
+            <span class="emoji">🏦</span>
+            <div>
+              <div class="t">Online Banking</div>
+              <div class="d">Coming soon…</div>
+            </div>
+          </button>
+        </div>
+
+        <!-- Form tiền mặt -->
+        <form id="cash-form" class="cash-form hidden">
+          <div class="f-row">
+            <label>Họ tên *</label>
+            <input required name="fullName" placeholder="Nguyễn Văn A">
+          </div>
+          <div class="f-row">
+            <label>Email *</label>
+            <input type="email" required name="email" placeholder="you@email.com">
+          </div>
+          <div class="f-row">
+            <label>Số điện thoại *</label>
+            <input required name="phone" placeholder="09xx xxx xxx">
+          </div>
+          <div class="f-row">
+            <label>Số lượng vé</label>
+            <input type="number" name="qty" min="1" value="1">
+          </div>
+
+          <div class="actions">
+            <button type="button" class="btn ghost" data-close>Hủy</button>
+            <button type="submit" class="btn primary">Xác nhận giữ chỗ</button>
+          </div>
+          <div id="cash-msg" class="msg"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS -->
+  <script>
+    const API = '/api';
+    const qs = new URLSearchParams(location.search);
+    const slug = (qs.get('slug') || '').trim();
+    const $$ = (s, el = document) => el.querySelector(s);
+
+    const fmtDate = t => t ? new Date(t).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+    const fmtTimeHM = t => t ? new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
+    const money = (cents, cur = 'VND') => cents == null ? '' : (Math.round(Number(cents) / 100)).toLocaleString('vi-VN') + ' ' + cur;
+
+    let CURRENT_EVENT = null;
+
+    async function load() {
+      const empty = $$('#empty');
+      if (!slug) { empty.innerHTML = '<p class="muted">Thiếu tham số <code>slug</code>.</p>'; return; }
+
+      try {
+        const res = await fetch(`${API}/events/${encodeURIComponent(slug)}`);
+        if (!res.ok) { empty.innerHTML = '<p class="muted">Không tìm thấy sự kiện.</p>'; return; }
+        const ev = await res.json(); CURRENT_EVENT = ev;
+
+        // header
+        $$('#ev-title').textContent = ev.Title || '';
+        const tags = [];
+        if (ev.Category) tags.push(`<span class="tag">${ev.Category}</span>`);
+        if (ev.City) tags.push(`<span class="tag">${ev.City}</span>`);
+        $$('#ev-tags').innerHTML = tags.join('');
+
+        // cover & facts
+        $$('#ev-cover').src = ev.BannerUrl || ev.ThumbnailUrl || '/assets/placeholder.jpg';
+        $$('#ev-cover').alt = ev.Title || 'Event cover';
+
+        const d = fmtDate(ev.StartTime), t1 = fmtTimeHM(ev.StartTime), t2 = fmtTimeHM(ev.EndTime);
+        $$('#ev-date').textContent = d || '';
+        $$('#ev-time').textContent = (t1 && t2) ? `${t1} – ${t2}` : (t1 || '');
+        $$('#ev-venue').textContent = ev.VenueName || ev.VenueAddress || ev.City || '';
+        $$('#ev-capacity').textContent = ev.Capacity ? `Sức chứa: ${ev.Capacity}` : '—';
+        $$('#ev-price').textContent = money(ev.PriceCents, ev.Currency);
+        $$('#ev-desc').textContent = ev.Description || '—';
+
+        // lists
+        const toList = txt => (txt || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+          .map(s => `<div class="li">✅ <div>${s}</div></div>`).join('') || '<div class="muted">—</div>';
+        $$('#ev-benefits').innerHTML = toList(ev.Benefits);
+        $$('#ev-reqs').innerHTML = toList(ev.Requirements);
+
+        // map
+        if (typeof L !== 'undefined' && ev.Lat != null && ev.Lng != null) {
+          const mapEl = $$('#map'); mapEl.style.display = 'block';
+          const map = L.map('map').setView([ev.Lat, ev.Lng], 15);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+          L.marker([ev.Lat, ev.Lng]).addTo(map);
+          setTimeout(() => map.invalidateSize(true), 60);
+        }
+
+        $$('#event-card').hidden = false;
+        empty.remove();
+      } catch (e) {
+        $$('#empty').innerHTML = '<p class="muted">Có lỗi khi tải sự kiện.</p>';
+        console.warn(e);
+      }
+    }
+
+    // ----- BOOKING MODAL -----
+    const modal = $$('#book-modal');
+    const cashForm = $$('#cash-form');
+    const msg = $$('#cash-msg');
+
+    function openModal() { modal.classList.remove('hidden'); modal.setAttribute('aria-hidden', 'false'); }
+    function closeModal() { modal.classList.add('hidden'); modal.setAttribute('aria-hidden', 'true'); cashForm.classList.add('hidden'); msg.textContent = ''; }
+
+    document.addEventListener('click', (e) => { if (e.target && e.target.id === 'btnBook') openModal(); });
+    modal?.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) closeModal(); });
+
+    $$('#btnCash')?.addEventListener('click', () => cashForm.classList.remove('hidden'));
+    $$('#btnOnline')?.addEventListener('click', () => alert('Online Banking: Coming soon ✨'));
+
+    // GỬI ĐẶT VÉ & GỬI MAIL NGAY: POST /api/bookings
+    cashForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!CURRENT_EVENT) return;
+
+      const fd = new FormData(cashForm);
+      const qtyInput = cashForm.querySelector('input[name="qty"]');
+      const payload = {
+        slug,
+        method: 'cash',
+        name: fd.get('fullName'),
+        email: fd.get('email'),
+        phone: fd.get('phone'),
+        quantity: Number(fd.get('qty') || 1)
+      };
+
+      try {
+        msg.textContent = 'Đang giữ chỗ & gửi vé...';
+        const res = await fetch('/api/bookings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        // Hết vé -> báo còn lại & chỉnh max cho input
+        if (res.status === 409 && data?.error === 'sold_out') {
+          const remain = Number(data.remaining || 0);
+          msg.textContent = `⚠ Hết chỗ cho số lượng yêu cầu. Còn lại: ${remain} vé.`;
+          if (qtyInput) {
+            qtyInput.max = Math.max(remain, 0);
+            if (remain === 0) {
+              qtyInput.value = 0;
+            } else if (Number(qtyInput.value) > remain) {
+              qtyInput.value = remain;
+            }
+          }
+          return;
+        }
+
+        if (!res.ok) throw new Error(data.detail || data.error || 'booking_failed');
+
+        // Thành công -> chuyển trang cảm ơn
+        window.location.href = data.redirect || `/pages/booking-success.html?code=${encodeURIComponent(data.code)}`;
+      } catch (err) {
+        msg.textContent = '⚠ ' + err.message;
+      }
+    });
+
+    load();
+  </script>
+
+
+
+</body>
+
+</html>

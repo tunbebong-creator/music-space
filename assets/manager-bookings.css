@@ -1,0 +1,39 @@
+:root{--line:#e2e8f0;--muted:#64748b;--bg:#f8fafc;--accent:#0ea5e9}
+*{box-sizing:border-box}
+body{background:var(--bg);color:#0f172a}
+.page{max-width:1100px;margin:22px auto;padding:0 14px}
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.back{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;text-decoration:none;color:inherit}
+h1{margin:0;font-size:22px}
+.toolbar{display:flex;gap:10px;align-items:center;margin:10px 0 18px;flex-wrap:wrap}
+.toolbar input,.toolbar select{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.muted{color:var(--muted)}
+.table{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:960px}
+th,td{padding:12px;border-top:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+th{background:#f8fafc;text-align:left;position:sticky;top:0;z-index:1}
+.btn{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;text-decoration:none;color:inherit;cursor:pointer}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.ghost{background:#fff}
+.btn.small{padding:6px 10px;font-size:12px}
+.actions{display:flex;gap:8px}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:84px;height:28px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+.badge.pending{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+.badge.confirmed{background:#ecfdf5;border-color:#bbf7d0;color:#065f46}
+.badge.cancelled{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+.badge.checked_in{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
+
+.actions { display:flex; gap:6px; justify-content:flex-start; }
+.btn-mini{
+  padding:6px 12px; font-size:13px; border-radius:10px; cursor:pointer;
+  border:1px solid #e5e7eb; background:#fff;
+}
+.btn-mini.primary{ background:#00aaff; color:#fff; border-color:#00aaff; }
+.btn-mini.ghost{ background:#fff; color:#c00; }
+.btn-mini.disabled{ opacity:.45; cursor:not-allowed; }
+.badge{ padding:4px 8px; border-radius:999px; font-size:12px; }
+.badge.pending{ background:#fff3e0; color:#a85b00; }
+.badge.confirmed{ background:#e8f6ff; color:#0b72b9; }
+.badge.cancelled{ background:#ffe8e8; color:#b60d0d; }
+.badge.checked_in{ background:#e8ffe8; color:#0b7b0b; }
+

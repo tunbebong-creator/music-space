@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Đăng ký làm đối tác - Music Space</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/assets/style.css" />
+  <style>
+    body { font-family: "Inter", sans-serif; background: linear-gradient(135deg,#fdfcfb 0%,#e2d1c3 100%); margin:0; padding:0; }
+    .page { max-width:760px; margin:40px auto; padding:0 16px; }
+    .back-btn { display:inline-block; margin-bottom:20px; padding:8px 14px; border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc; text-decoration:none; color:#0f172a; font-weight:600; transition:background .2s; }
+    .back-btn:hover { background:#e2e8f0; }
+    .box { background:#fff; border-radius:16px; padding:28px; box-shadow:0 8px 24px rgba(0,0,0,.08); }
+    .box h2 { margin:0 0 20px; font-size:20px; color:#0f172a; }
+    .row { display:grid; gap:10px; margin-bottom:16px; }
+    label { font-weight:600; font-size:14px; }
+    input, textarea, select { width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; }
+    textarea { resize:vertical; }
+    .actions { display:flex; align-items:center; gap:12px; }
+    button { padding:12px 16px; border:0; border-radius:12px; background:#0ea5e9; color:#fff; cursor:pointer; font-weight:700; font-size:15px; transition:background .2s; }
+    button:hover { background:#0284c7; }
+    button[disabled] { opacity:.6; cursor:not-allowed; }
+    #partner-msg { margin-top:6px; font-weight:600; font-size:14px; }
+    .muted { color:#64748b; font-size:13px; }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <a class="back-btn" href="/pages/healing-space.html">← Quay lại</a>
+
+    <section class="box">
+      <h2>Đăng ký làm đối tác (Space Partner)</h2>
+      <form id="partner-form" novalidate>
+        <div class="row">
+          <label for="venueName">Tên không gian/đơn vị</label>
+          <input id="venueName" name="venueName" required />
+        </div>
+
+        <div class="row">
+          <label for="spaceType">Loại không gian</label>
+          <select id="spaceType" name="spaceType" required>
+            <option value="">Chọn loại</option>
+            <option>Cafe</option>
+            <option>Studio</option>
+            <option>Thư viện</option>
+            <option>Khác</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="address">Địa chỉ (AddressLine)</label>
+          <input id="address" name="address" placeholder="Số nhà, đường, phường/xã..." required />
+        </div>
+
+        <div class="row" style="grid-template-columns:1fr 1fr">
+          <div>
+            <label for="province">Tỉnh/Thành (City)</label>
+            <select id="province" name="city" required>
+              <option value="">Chọn tỉnh/thành</option>
+            </select>
+          </div>
+          <div>
+            <label for="district">Khu vực (Region)</label>
+            <input id="district" name="district" placeholder="Quận/Huyện (tuỳ chọn)" />
+          </div>
+        </div>
+
+        <div class="row">
+          <label for="desc">Mô tả ngắn (SpaceDesc)</label>
+          <textarea id="desc" name="desc" rows="4" placeholder="Giới thiệu ngắn gọn về không gian, dịch vụ..."></textarea>
+        </div>
+
+        <div class="row" style="grid-template-columns:1fr 1fr">
+          <div>
+            <label for="email">Email liên hệ</label>
+            <input id="email" type="email" name="email" required />
+          </div>
+          <div>
+            <label for="phone">SĐT liên hệ</label>
+            <input id="phone" name="phone" />
+          </div>
+        </div>
+
+        <div class="row">
+          <label><input type="checkbox" id="agreeTos" /> Tôi đồng ý với điều khoản sử dụng</label>
+          <div class="muted">Gửi form đồng nghĩa bạn cho phép Music Space liên hệ qua email/điện thoại.</div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="submitBtn">Gửi đăng ký</button>
+          <div id="partner-msg"></div>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <!-- Lấy API base -->
+  <script src="/js/api.js"></script>
+  <script>
+    // Chặn người chưa login
+    const u = localStorage.getItem('ms_user');
+    if (!u) window.location.href = '/index.html#login';
+
+    const VN_PROVINCES = [
+      "An Giang","Bà Rịa - Vũng Tàu","Bắc Giang","Bắc Kạn","Bạc Liêu","Bắc Ninh",
+      "Bến Tre","Bình Dương","Bình Định","Bình Phước","Bình Thuận","Cà Mau",
+      "Cần Thơ","Cao Bằng","Đà Nẵng","Đắk Lắk","Đắk Nông","Điện Biên","Đồng Nai",
+      "Đồng Tháp","Gia Lai","Hà Giang","Hà Nam","Hà Nội","Hà Tĩnh","Hải Dương",
+      "Hải Phòng","Hậu Giang","Hòa Bình","Hưng Yên","Khánh Hòa","Kiên Giang",
+      "Kon Tum","Lai Châu","Lâm Đồng","Lạng Sơn","Lào Cai","Long An","Nam Định",
+      "Nghệ An","Ninh Bình","Ninh Thuận","Phú Thọ","Phú Yên","Quảng Bình",
+      "Quảng Nam","Quảng Ngãi","Quảng Ninh","Quảng Trị","Sóc Trăng","Sơn La",
+      "Tây Ninh","Thái Bình","Thái Nguyên","Thanh Hóa","Thừa Thiên Huế","Tiền Giang",
+      "TP. Hồ Chí Minh","Trà Vinh","Tuyên Quang","Vĩnh Long","Vĩnh Phúc","Yên Bái"
+    ];
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const provinceSelect = document.getElementById("province");
+      VN_PROVINCES.sort((a,b)=>a.localeCompare(b,"vi")).forEach(p=>{
+        const opt=document.createElement("option");
+        opt.value=p; opt.textContent=p;
+        provinceSelect.appendChild(opt);
+      });
+    });
+
+    // Submit form
+    document.getElementById('partner-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('partner-msg');
+      const btn = document.getElementById('submitBtn');
+      msg.textContent = 'Đang gửi...';
+      btn.disabled = true;
+
+      const fd = new FormData(e.target);
+      const payload = {
+        venueName: fd.get('venueName')?.trim(),
+        spaceType: fd.get('spaceType') || null,
+        address:   fd.get('address')?.trim() || null,   // AddressLine
+        city:      fd.get('city') || null,              // City
+        district:  fd.get('district')?.trim() || null,  // Region
+        desc:      fd.get('desc')?.trim() || null,      // SpaceDesc
+        email:     fd.get('email')?.trim(),
+        phone:     fd.get('phone')?.trim() || null,
+        agreeTos:  document.getElementById('agreeTos').checked
+      };
+
+      try {
+        const res = await fetch(API + '/partners/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(()=> ({}));
+        if (!res.ok) throw new Error(data.error || 'Đăng ký thất bại');
+
+        msg.textContent = '✅ Đăng ký thành công! Chúng tôi sẽ liên hệ qua email.';
+        e.target.reset();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (err) {
+        msg.textContent = '⚠ ' + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
