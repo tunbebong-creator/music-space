@@ -19,6 +19,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
 app.use(express.static(path.resolve(__dirname, '..')));
 
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+app.get('/api/ping', (req, res) => res.json({ pong: true }));
+
 app.use('/api', indexRoutes);
 app.use('/api/manager', managerRoutes);
 
