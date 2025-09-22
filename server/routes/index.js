@@ -191,11 +191,14 @@ router.post('/auth/reset', async (req, res) => {
 
     const hash = await bcrypt.hash(String(password), 10);
 
-    await query(sqlx`UPDATE users SET password_hash = ${hash} WHERE id = ${pr.user_id}`.text,
-      sqlx`UPDATE users SET password_hash = ${hash} WHERE id = ${pr.user_id}`.values);
+    {
+      const q1 = sqlx`UPDATE users SET password_hash = ${hash} WHERE id = ${pr.user_id}`;
+      await query(q1.text, q1.values);
 
-    await query(sqlx`UPDATE password_resets SET used_at = NOW() WHERE id = ${pr.id}`.text,
-      sqlx`UPDATE password_resets SET used_at = NOW() WHERE id = ${pr.id}`.values);
+      const q2 = sqlx`UPDATE password_resets SET used_at = NOW() WHERE id = ${pr.id}`;
+      await query(q2.text, q2.values);
+    }
+
 
     res.json({ ok: true });
   } catch (e) {
@@ -273,7 +276,8 @@ router.get('/events/:slug', async (req, res) => {
              description, benefits, requirements,
              thumbnail_url, banner_url, lat, lng
       FROM events
-      WHERE slug = ${slug}
+      WHERE lower(slug) = lower(${slug})
+
       LIMIT 1
     `;
     const r = await query(q.text, q.values);

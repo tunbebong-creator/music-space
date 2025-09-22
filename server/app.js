@@ -21,7 +21,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
-app.use(express.static(path.resolve(__dirname, '..')));
+app.use(express.static(path.resolve(__dirname, '..', 'public')));
 
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 app.get('/api/ping', (_req, res) => res.json({ pong: true }));
@@ -32,7 +32,8 @@ app.use('/api', partnerRoutes);
 
 try {
   const bookingsRoutes = require('./routes/bookings');
-  app.use('/api', bookingsRoutes);
+  app.use('/api/bookings', bookingsRoutes);
+
   console.log('✅ Mounted bookings routes under /api');
 } catch (e) {
   console.log('ℹ️  bookings routes not found, skipping.');

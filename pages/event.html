@@ -212,33 +212,34 @@
 
         // header
         $$('#ev-title').textContent = ev.title || '';
+
         const tags = [];
         if (ev.category) tags.push(`<span class="tag">${ev.category}</span>`);
         if (ev.city) tags.push(`<span class="tag">${ev.city}</span>`);
         $$('#ev-tags').innerHTML = tags.join('');
 
-        // cover & facts
         $$('#ev-cover').src = ev.banner_url || ev.thumbnail_url || '/assets/placeholder.jpg';
         $$('#ev-cover').alt = ev.title || 'Event cover';
 
         const d = fmtDate(ev.start_time);
         const t1 = fmtTimeHM(ev.start_time);
         const t2 = fmtTimeHM(ev.end_time);
-
         $$('#ev-date').textContent = d || '';
         $$('#ev-time').textContent = (t1 && t2) ? `${t1} – ${t2}` : (t1 || '');
-        $$('#ev-venue').textContent = [ev.venue_name, ev.venue_address || ev.city].filter(Boolean).join(', ');
+
+        $$('#ev-venue').textContent = ev.venue_name || ev.venue_address || ev.city || '';
         $$('#ev-capacity').textContent = ev.capacity ? `Sức chứa: ${ev.capacity}` : '—';
         $$('#ev-price').textContent = money(ev.price_cents, ev.currency);
         $$('#ev-desc').textContent = ev.description || '—';
 
-        // lists
-        const toList = txt => (txt || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+        const toList = txt => (txt || '').split(/\r?\n/)
+          .map(s => s.trim()).filter(Boolean)
           .map(s => `<div class="li">✅ <div>${s}</div></div>`).join('') || '<div class="muted">—</div>';
+
         $$('#ev-benefits').innerHTML = toList(ev.benefits);
         $$('#ev-reqs').innerHTML = toList(ev.requirements);
 
-        // mini map
+        // map
         if (typeof L !== 'undefined' && ev.lat != null && ev.lng != null) {
           const mapEl = $$('#map'); mapEl.style.display = 'block';
           const map = L.map('map').setView([ev.lat, ev.lng], 15);
@@ -246,6 +247,7 @@
           L.marker([ev.lat, ev.lng]).addTo(map);
           setTimeout(() => map.invalidateSize(true), 60);
         }
+
 
         $$('#event-card').hidden = false;
         empty.remove();
