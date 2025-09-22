@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const router = express.Router();
-const { pool, query, sqlx } = require('../config/db'); // <-- adapter Postgres
+const { pool, query, sqlx } = require('../config/db'); // Postgres adapter
 
 /* ================== Mailer (dùng cho forgot/reset) ================== */
 function mailer() {
@@ -36,47 +36,78 @@ async function ensureResetTable() {
 // POST /api/auth/register
 router.post('/auth/register', async (req, res) => {
   const { email, password, fullName, phone } = req.body || {};
-  try {
-    const e = (email || '').trim().toLowerCase();
-    const p = (password || '').toString();
-    if (!e || !p) return res.status(400).json({ error: 'missing_email_or_password' });
+  const e = (email || '').trim().toLowerCase();
+  const p = (password || '').toString();
 
-    // Check trùng email
+  if (!e || !p) return res.status(400).json({ error: 'missing_email_or_password' });
+
+  let client;
+  try {
+    // Check trùng email trong users
     {
-      const q = sqlx`SELECT 1 FROM users WHERE email = ${e} LIMIT 1`;
-      const r = await query(q.text, q.values);
-      if (r.rows.length) return res.status(409).json({ error: 'email_exists' });
+      const qCheck = sqlx`SELECT 1 FROM users WHERE email = ${e} LIMIT 1`;
+      const rCheck = await query(qCheck.text, qCheck.values);
+      if (rCheck.rows.length) return res.status(409).json({ error: 'email_exists' });
     }
 
-    // Hash password
     const hash = await bcrypt.hash(p, 10);
 
-    // Tạo users
+    // Transaction để tạo user + upsert customer an toàn mà KHÔNG cần UNIQUE constraint
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    // 1) Tạo users
     const qUser = sqlx`
       INSERT INTO users (email, password_hash, role, created_at)
       VALUES (${e}, ${hash}, ${'customer'}, NOW())
       RETURNING id
     `;
-    const u = await query(qUser.text, qUser.values);
+    const u = await client.query(qUser.text, qUser.values);
     const userId = u.rows[0].id;
 
-    // Upsert customers theo email (cần UNIQUE(email) hoặc đổi sang logic 2-bước)
-    // Nếu schema của bạn UNIQUE(email, phone) thì bạn có thể:
-    //  - dùng email làm khóa unique riêng, hoặc
-    //  - làm 2 bước: thử UPDATE theo user_id OR email, nếu rowCount=0 thì INSERT.
-    const qCust = sqlx`
-      INSERT INTO customers (user_id, email, full_name, phone, created_at)
-      VALUES (${userId}, ${e}, ${fullName || null}, ${phone || null}, NOW())
-      ON CONFLICT (email) DO UPDATE
-        SET full_name = COALESCE(EXCLUDED.full_name, customers.full_name),
-            phone     = COALESCE(EXCLUDED.phone,     customers.phone)
-    `;
-    await query(qCust.text, qCust.values);
+    // 2) Upsert customers theo chiến lược:
+    //    - UPDATE theo user_id
+    //    - nếu 0 rows → UPDATE theo email
+    //    - nếu vẫn 0 → INSERT mới
+    const full = fullName || null;
+    const ph = phone || null;
 
-    res.json({ ok: true, userId });
+    const updByUser = sqlx`
+      UPDATE customers
+      SET email = COALESCE(${e}, email),
+          full_name = COALESCE(${full}, full_name),
+          phone = COALESCE(${ph}, phone)
+      WHERE user_id = ${userId}
+    `;
+    const r1 = await client.query(updByUser.text, updByUser.values);
+
+    if (r1.rowCount === 0) {
+      const updByEmail = sqlx`
+        UPDATE customers
+        SET user_id = COALESCE(user_id, ${userId}),
+            full_name = COALESCE(${full}, full_name),
+            phone = COALESCE(${ph}, phone)
+        WHERE email = ${e}
+      `;
+      const r2 = await client.query(updByEmail.text, updByEmail.values);
+
+      if (r2.rowCount === 0) {
+        const insCust = sqlx`
+          INSERT INTO customers (user_id, email, full_name, phone, created_at)
+          VALUES (${userId}, ${e}, ${full}, ${ph}, NOW())
+        `;
+        await client.query(insCust.text, insCust.values);
+      }
+    }
+
+    await client.query('COMMIT');
+    return res.json({ ok: true, userId });
   } catch (err) {
+    if (client) { try { await client.query('ROLLBACK'); } catch {} }
     console.error('register error:', err);
-    res.status(500).json({ error: 'server_error', detail: err.message });
+    return res.status(500).json({ error: 'server_error', detail: err.message });
+  } finally {
+    if (client) client.release();
   }
 });
 
@@ -100,12 +131,14 @@ router.post('/auth/login', async (req, res) => {
     const ok = await bcrypt.compare(password, row.password_hash).catch(() => false);
     if (!ok) return res.status(401).json({ error: 'wrong_password' });
 
+    // 👇 Đây chính là chỗ trả dữ liệu về FE
     res.json({ id: row.id, email: row.email, role: row.role, fullName: row.full_name });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'server_error', detail: err.message });
   }
 });
+
 
 /* ---------- Forgot / Reset password ---------- */
 
@@ -117,7 +150,6 @@ router.post('/auth/forgot', async (req, res) => {
 
     await ensureResetTable();
 
-    // Tìm user
     const qU = sqlx`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
     const u = await query(qU.text, qU.values);
 
@@ -228,24 +260,16 @@ router.get('/healing-events', async (req, res) => {
       params.push(q);
       i++;
     }
-    if (city) {
-      clauses.push(`city = $${i++}`); params.push(city);
-    }
-    if (category) {
-      clauses.push(`category = $${i++}`); params.push(category);
-    }
+    if (city) { clauses.push(`city = $${i++}`); params.push(city); }
+    if (category) { clauses.push(`category = $${i++}`); params.push(category); }
 
     // bbox: minLng,minLat,maxLng,maxLat
     if (bbox) {
       const parts = bbox.split(',').map(parseFloat);
       if (parts.length === 4 && parts.every(n => !Number.isNaN(n))) {
         const [minLng, minLat, maxLng, maxLat] = parts;
-        clauses.push(`lat BETWEEN $${i} AND $${i + 1}`);
-        params.push(minLat, maxLat);
-        i += 2;
-        clauses.push(`lng BETWEEN $${i} AND $${i + 1}`);
-        params.push(minLng, maxLng);
-        i += 2;
+        clauses.push(`lat BETWEEN $${i} AND $${i + 1}`); params.push(minLat, maxLat); i += 2;
+        clauses.push(`lng BETWEEN $${i} AND $${i + 1}`); params.push(minLng, maxLng); i += 2;
       }
     }
 
