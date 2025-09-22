@@ -125,8 +125,10 @@ router.post('/auth/forgot', async (req, res) => {
       `;
       await query(qIns.text, qIns.values);
 
+      // Lấy từ ENV để gửi mail đúng domain
       const base = process.env.APP_BASE_URL || 'http://localhost:3000';
       const link = `${base}/pages/reset-password.html?token=${encodeURIComponent(token)}`;
+
 
       await mailer().sendMail({
         from: process.env.MAIL_FROM || process.env.SMTP_USER,
