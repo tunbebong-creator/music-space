@@ -1,199 +1,144 @@
+// server/routes/bookings.js
 const express = require('express');
-const router = express.Router();
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
-const { pool, query, sqlx, tx } = require('../config/db'); // adapter Postgres
+const router = express.Router();
 
-/* ---------- Mailer ---------- */
+const { pool, query, sqlx } = require('../config/db'); // pg adapter
+
+/* ------------ mailer ------------- */
 function mailer() {
-  const port = Number(process.env.SMTP_PORT || 587);
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port,
-    secure: port === 465, // 465 = SSL, 587 = STARTTLS
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: Number(process.env.SMTP_PORT || 465) === 465,
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    tls: { minVersion: 'TLSv1.2' },
   });
 }
 
-function ticketHtml(b) {
+function emailHtml(b) {
   const amount =
     (Number(b.amount_cents || 0) / 100).toLocaleString('vi-VN') +
-    ' ' +
-    (b.currency || 'VND');
+    ' ' + (b.currency || 'VND');
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:auto">
-    <h2>🎟️ Vé giữ chỗ – ${b.event_title || 'Sự kiện'}</h2>
-    <p>Xin chào <b>${b.customer_name || ''}</b>,</p>
-    <p>Bạn đã giữ chỗ thành công. Vui lòng thanh toán tại sự kiện.</p>
-    <table style="border-collapse:collapse">
-      <tr><td style="padding:6px 8px">Mã vé</td><td style="padding:6px 8px"><b>${b.code}</b></td></tr>
-      <tr><td style="padding:6px 8px">Sự kiện</td><td style="padding:6px 8px">${b.event_title || ''}</td></tr>
-      <tr><td style="padding:6px 8px">Thời gian</td><td style="padding:6px 8px">${b.start_time ? new Date(b.start_time).toLocaleString('vi-VN') : ''}</td></tr>
-      <tr><td style="padding:6px 8px">Số lượng</td><td style="padding:6px 8px">${b.quantity}</td></tr>
-      <tr><td style="padding:6px 8px">Giá trị</td><td style="padding:6px 8px">${amount}</td></tr>
-      <tr><td style="padding:6px 8px">PTTT</td><td style="padding:6px 8px">${(b.method || 'cash').toUpperCase()}</td></tr>
-      <tr><td style="padding:6px 8px">Trạng thái</td><td style="padding:6px 8px">${b.status}</td></tr>
-    </table>
-    <p style="margin-top:18px">Cảm ơn bạn đã đồng hành cùng Music Space 💚</p>
-  </div>`;
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:auto">
+      <h2>🎟️ Vé giữ chỗ – ${b.event_title || 'Sự kiện'}</h2>
+      <p>Xin chào <b>${b.customer_name || ''}</b>, bạn đã giữ chỗ thành công. Vui lòng thanh toán tại sự kiện.</p>
+      <table style="border-collapse:collapse">
+        <tr><td style="padding:6px 8px">Mã vé</td><td style="padding:6px 8px"><b>${b.code}</b></td></tr>
+        <tr><td style="padding:6px 8px">Sự kiện</td><td style="padding:6px 8px">${b.event_title || ''}</td></tr>
+        <tr><td style="padding:6px 8px">Thời gian</td><td style="padding:6px 8px">${new Date(b.start_time).toLocaleString('vi-VN')}</td></tr>
+        <tr><td style="padding:6px 8px">Số lượng</td><td style="padding:6px 8px">${b.quantity}</td></tr>
+        <tr><td style="padding:6px 8px">Giá trị</td><td style="padding:6px 8px">${amount}</td></tr>
+        <tr><td style="padding:6px 8px">PTTT</td><td style="padding:6px 8px">${(b.method || 'cash').toUpperCase()}</td></tr>
+        <tr><td style="padding:6px 8px">Trạng thái</td><td style="padding:6px 8px">${b.status}</td></tr>
+      </table>
+      <p style="margin-top:16px">Cảm ơn bạn đã đồng hành cùng Music Space 💚</p>
+    </div>`;
 }
 
-/* ---------- Health ---------- */
-router.get('/bookings/health', (_req, res) => res.json({ ok: true }));
+/* ============================================================
+   POST /api/bookings  { slug, method, name, email, phone, quantity }
+   - giữ chỗ an toàn bằng transaction + FOR UPDATE
+============================================================ */
+router.post('/', async (req, res) => {
+  const { slug, method = 'cash', name, email, phone } = req.body || {};
+  const qty = Math.max(1, parseInt(req.body?.quantity, 10) || 1);
 
-/* ---------- Tạo vé + KIỂM TRA CAPACITY + gửi mail ngay ---------- */
-router.post('/bookings', async (req, res) => {
-  let booking;
+  if (!slug || !name || !email || !phone)
+    return res.status(400).json({ error: 'missing_fields' });
+
+  let client;
   try {
-    let { slug, method = 'cash', name, email, phone, quantity = 1 } = req.body || {};
-    if (!slug || !name || !email || !phone) {
-      return res.status(400).json({ error: 'missing_fields' });
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    // 1) Chốt event + khoá hàng
+    const qEv = sqlx`
+      SELECT id, title, capacity, price_cents, currency, start_time
+      FROM events
+      WHERE slug = ${slug}
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const evr = await client.query(qEv.text, qEv.values);
+    if (!evr.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'event_not_found' });
+    }
+    const ev = evr.rows[0];
+
+    // 2) Đếm đã đặt (trừ cancelled)
+    const qBooked = sqlx`
+      SELECT COALESCE(SUM(quantity), 0)::int AS booked
+      FROM event_bookings
+      WHERE event_id = ${ev.id} AND status <> 'cancelled'
+    `;
+    const br = await client.query(qBooked.text, qBooked.values);
+    const booked = br.rows[0].booked;
+    const capacity = Number(ev.capacity || 0);
+    const remaining = Math.max(capacity - booked, 0);
+
+    if (capacity && qty > remaining) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'sold_out', remaining });
     }
 
-    slug = String(slug).toLowerCase().trim();
-    quantity = Math.max(parseInt(quantity, 10) || 1, 1);
+    // 3) Tạo booking
+    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const amount = (Number(ev.price_cents || 0) * qty) | 0;
 
-    booking = await tx(async (q) => {
-      // 1) Khóa event theo slug (FOR UPDATE) để chống overbook
-      const qEv = sqlx`
-        SELECT id, title, price_cents, currency, start_time, capacity
-        FROM events
-        WHERE LOWER(TRIM(slug)) = ${slug}
-        FOR UPDATE
-        LIMIT 1
-      `;
-      const evRes = await q(qEv.text, qEv.values);
-      if (!evRes.rows.length) {
-        const err = new Error('event_not_found');
-        err.statusCode = 404;
-        throw err;
-      }
-      const ev = evRes.rows[0];
+    const qIns = sqlx`
+      INSERT INTO event_bookings
+        (event_id, code, quantity, amount_cents, method, status,
+         customer_name, customer_email, customer_phone, created_at)
+      VALUES
+        (${ev.id}, ${code}, ${qty}, ${amount}, ${method.toLowerCase()},
+         ${'pending'}, ${name}, ${email}, ${phone}, NOW())
+      RETURNING id
+    `;
+    const ir = await client.query(qIns.text, qIns.values);
+    const bookingId = ir.rows[0].id;
 
-      // 2) Tính đã bán (pending/confirmed/checked_in)
-      const statuses = ['pending', 'confirmed', 'checked_in'];
-      const qSold = sqlx`
-        SELECT COALESCE(SUM(quantity), 0)::int AS sold
-        FROM event_bookings
-        WHERE event_id = ${ev.id}
-          AND status = ANY(${statuses})
-        FOR UPDATE
-      `;
-      const soldRes = await q(qSold.text, qSold.values);
-      const sold = Number(soldRes.rows[0].sold || 0);
+    await client.query('COMMIT');
 
-      // 3) Check capacity
-      const capacity = ev.capacity == null ? null : Number(ev.capacity);
-      if (capacity != null) {
-        const remaining = Math.max(capacity - sold, 0);
-        if (quantity > remaining) {
-          const err = new Error('sold_out');
-          err.statusCode = 409;
-          err.meta = { remaining };
-          throw err;
-        }
-      }
-
-      // 4) Insert booking
-      const amountCents = (ev.price_cents ? Number(ev.price_cents) : 0) * quantity;
-      const code = 'MS' + Date.now().toString().slice(-6);
-
-      const qIns = sqlx`
-        INSERT INTO event_bookings
-          (event_id, code, customer_name, customer_email, customer_phone,
-           quantity, amount_cents, method, status, created_at)
-        VALUES
-          (${ev.id}, ${code}, ${name}, ${email}, ${phone},
-           ${quantity}, ${amountCents}, ${method}, ${'pending'}, NOW())
-        RETURNING id
-      `;
-      const ins = await q(qIns.text, qIns.values);
-      const bookingId = ins.rows[0].id;
-
-      // Trả dữ liệu cần dùng sau commit
-      return {
-        id: bookingId,
-        code,
-        quantity,
-        amount_cents: amountCents,
-        method,
-        status: 'pending',
-        event_title: ev.title,
-        start_time: ev.start_time,
-        currency: ev.currency || 'VND',
-        email,
-        name,
-      };
-    });
-
-    // 5) Gửi mail sau khi COMMIT (không giữ lock)
-    let mailed = false, mailErr = null;
+    // 4) Gửi mail (ngoài transaction)
     try {
       await mailer().sendMail({
         from: process.env.MAIL_FROM || process.env.SMTP_USER,
-        to: booking.email,
-        subject: `Vé giữ chỗ • ${booking.event_title}`,
-        html: ticketHtml({
-          ...booking,
-          customer_name: booking.name,
+        to: email,
+        subject: `Vé giữ chỗ • ${ev.title}`,
+        html: emailHtml({
+          code,
+          quantity: qty,
+          amount_cents: amount,
+          currency: ev.currency || 'VND',
+          method,
+          status: 'pending',
+          event_title: ev.title,
+          start_time: ev.start_time,
+          customer_name: name
         }),
       });
-      mailed = true;
-
-      // 6) Ghi sent_at
-      const qSent = sqlx`UPDATE event_bookings SET sent_at = NOW() WHERE id = ${booking.id}`;
-      await query(qSent.text, qSent.values);
-    } catch (e) {
-      console.error('✉️  send mail error:', e);
-      mailErr = e.message;
+      // cập nhật sent_at (không cần chặn flow nếu lỗi)
+      await query('UPDATE event_bookings SET sent_at = NOW() WHERE id = $1', [bookingId]);
+    } catch (mailErr) {
+      console.warn('send mail failed:', mailErr.message);
     }
 
     return res.json({
       ok: true,
-      id: booking.id,
-      code: booking.code,
-      mailed,
-      mailErr,
-      redirect: `/pages/booking-success.html?code=${encodeURIComponent(booking.code)}`
+      code,
+      id: bookingId,
+      redirect: `/pages/booking-success.html?code=${encodeURIComponent(code)}`
     });
   } catch (e) {
-    const status = e.statusCode || 500;
-    if (e.message === 'sold_out') {
-      return res.status(status).json({
-        error: 'sold_out',
-        message: 'Không đủ vé trống.',
-        ...(e.meta || {})
-      });
-    }
-    if (e.message === 'event_not_found') {
-      return res.status(status).json({ error: 'event_not_found' });
-    }
+    if (client) { try { await client.query('ROLLBACK'); } catch {} }
     console.error('bookings/create error:', e);
-    res.status(500).json({ error: 'server_error', detail: e.message });
-  }
-});
-
-/* ---------- Lấy vé theo mã code (cho trang success) ---------- */
-router.get('/bookings/by-code/:code', async (req, res) => {
-  try {
-    const code = (req.params.code || '').trim();
-    const q = sqlx`
-      SELECT b.*,
-             e.title AS event_title,
-             e.start_time,
-             e.currency,
-             e.banner_url,
-             e.thumbnail_url
-      FROM event_bookings b
-      JOIN events e ON e.id = b.event_id
-      WHERE b.code = ${code}
-      LIMIT 1
-    `;
-    const r = await query(q.text, q.values);
-    if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
-    res.json(r.rows[0]);
-  } catch (e) {
-    console.error('get by code error:', e);
-    res.status(500).json({ error: 'server_error' });
+    return res.status(500).json({ error: 'server_error', detail: e.message });
+  } finally {
+    if (client) client.release();
   }
 });
 
