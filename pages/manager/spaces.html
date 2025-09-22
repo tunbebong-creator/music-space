@@ -68,20 +68,20 @@
           return;
         }
 
-        tbody.innerHTML = data.map(p => `
-          <tr>
-            <td>${p.Id}</td>
-            <td>${p.SpaceName || ''}</td>
-            <td>${p.SpaceType || ''}</td>
-            <td>${p.AddressLine || ''}</td>
-            <td>${p.City || ''}</td>
-            <td>${p.Region || ''}</td>
-            <td class="desc">${p.SpaceDesc || ''}</td>
-            <td>${p.ContactEmail || ''}</td>
-            <td>${p.ContactPhone || ''}</td>
-            <td><span class="status ${p.Status?.toLowerCase()}">${p.Status}</span></td>
-            <td>${p.CreatedAt ? new Date(p.CreatedAt).toLocaleString('vi-VN') : ''}</td>
-          </tr>
+         tbody.innerHTML = (rows || []).map(r => `
+        <tr>
+          <td>${fmt(r.id)}</td>
+          <td>${fmt(r.space_name)}</td>
+          <td>${fmt(r.space_type)}</td>
+          <td>${fmt(r.address_line)}</td>
+          <td>${fmt(r.city)}</td>
+          <td>${fmt(r.region)}</td>
+          <td>${fmt(r.space_desc)}</td>
+          <td>${fmt(r.contact_email)}</td>
+          <td>${fmt(r.contact_phone)}</td>
+          <td>${fmt(r.status)}</td>
+          <td>${fmt(r.created_at ? new Date(r.created_at).toLocaleString('vi-VN') : '')}</td>
+        </tr>
         `).join('');
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="11" class="muted">⚠ ${err.message}</td></tr>`;
