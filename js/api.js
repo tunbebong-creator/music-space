@@ -69,6 +69,7 @@
   window.apiPostJSON = postJSON;
   window.apiPutJSON = putJSON;
   window.apiDelete = del;
+  window.API = API_BASE;
 
   // ============ QUICK PING ============
   // Bạn đã có /api/ping và /health → gọi cái nào cũng được
