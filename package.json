@@ -1,21 +1,26 @@
 {
   "name": "music-space",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Music Space backend (Express + Postgres)",
+  "main": "server/app.js",
   "scripts": {
+    "start": "node server/app.js",
+    "dev": "nodemon server/app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
-    "mssql": "^11.0.1",
     "multer": "^2.0.2",
-    "nodemailer": "^7.0.6"
+    "nodemailer": "^7.0.6",
+    "pg": "^8.16.3"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }

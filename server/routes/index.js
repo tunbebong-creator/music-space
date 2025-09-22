@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const router = express.Router();
-const { sql, getPool } = require('../config/db');
+const { pool, query, sqlx } = require('../config/db'); // <-- adapter Postgres
 
 /* ================== Mailer (dùng cho forgot/reset) ================== */
 function mailer() {
@@ -16,23 +16,23 @@ function mailer() {
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
 }
-async function ensureResetTable(pool) {
-  await pool.request().query(`
-IF OBJECT_ID('dbo.PasswordResets','U') IS NULL
-BEGIN
-  CREATE TABLE dbo.PasswordResets (
-    Id        BIGINT IDENTITY(1,1) PRIMARY KEY,
-    UserId    BIGINT        NOT NULL,
-    Token     NVARCHAR(200) NOT NULL UNIQUE,
-    ExpiresAt DATETIME2     NOT NULL,
-    UsedAt    DATETIME2     NULL,
-    CreatedAt DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME()
-  );
-END
-`);
+
+/** Tạo bảng password_resets nếu chưa có (Postgres) */
+async function ensureResetTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id          BIGSERIAL PRIMARY KEY,
+      user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token       TEXT   NOT NULL UNIQUE,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      used_at     TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
 /* ================= AUTH ================= */
+
 // POST /api/auth/register
 router.post('/auth/register', async (req, res) => {
   const { email, password, fullName, phone } = req.body || {};
@@ -41,54 +41,42 @@ router.post('/auth/register', async (req, res) => {
     const p = (password || '').toString();
     if (!e || !p) return res.status(400).json({ error: 'missing_email_or_password' });
 
-    const pool = await getPool();
-
     // Check trùng email
-    const exist = await pool.request()
-      .input('Email', sql.NVarChar(255), e)
-      .query(`SELECT TOP 1 Id FROM dbo.Users WHERE Email=@Email`);
-    if (exist.recordset.length) return res.status(409).json({ error: 'email_exists' });
+    {
+      const q = sqlx`SELECT 1 FROM users WHERE email = ${e} LIMIT 1`;
+      const r = await query(q.text, q.values);
+      if (r.rows.length) return res.status(409).json({ error: 'email_exists' });
+    }
 
     // Hash password
     const hash = await bcrypt.hash(p, 10);
 
-    // Tạo Users (PasswordHash)
-    const u = await pool.request()
-      .input('Email', sql.NVarChar(255), e)
-      .input('Hash', sql.NVarChar(255), hash)
-      .input('Role', sql.VarChar(20), 'customer')
-      .query(`
-        INSERT INTO dbo.Users (Email, PasswordHash, Role, CreatedAt)
-        OUTPUT INSERTED.Id
-        VALUES (@Email, @Hash, @Role, SYSUTCDATETIME())
-      `);
+    // Tạo users
+    const qUser = sqlx`
+      INSERT INTO users (email, password_hash, role, created_at)
+      VALUES (${e}, ${hash}, ${'customer'}, NOW())
+      RETURNING id
+    `;
+    const u = await query(qUser.text, qUser.values);
+    const userId = u.rows[0].id;
 
-    const userId = u.recordset[0].Id;
-
-    // Upsert Customers — đảm bảo Email NOT NULL
-    await pool.request()
-      .input('UserId', sql.BigInt, userId)
-      .input('Email', sql.NVarChar(255), e)
-      .input('FullName', sql.NVarChar(255), fullName || null)
-      .input('Phone', sql.NVarChar(50), phone || null)
-      .query(`
-MERGE dbo.Customers AS c
-USING (SELECT @UserId AS UserId, @Email AS Email) AS s
-   ON c.UserId = s.UserId OR c.Email = s.Email
-WHEN MATCHED THEN
-  UPDATE SET
-    Email    = @Email,
-    FullName = COALESCE(@FullName, c.FullName),
-    Phone    = COALESCE(@Phone,    c.Phone)
-WHEN NOT MATCHED THEN
-  INSERT (UserId, Email, FullName, Phone, CreatedAt)
-  VALUES (@UserId, @Email, @FullName, @Phone, SYSUTCDATETIME());
-      `);
+    // Upsert customers theo email (cần UNIQUE(email) hoặc đổi sang logic 2-bước)
+    // Nếu schema của bạn UNIQUE(email, phone) thì bạn có thể:
+    //  - dùng email làm khóa unique riêng, hoặc
+    //  - làm 2 bước: thử UPDATE theo user_id OR email, nếu rowCount=0 thì INSERT.
+    const qCust = sqlx`
+      INSERT INTO customers (user_id, email, full_name, phone, created_at)
+      VALUES (${userId}, ${e}, ${fullName || null}, ${phone || null}, NOW())
+      ON CONFLICT (email) DO UPDATE
+        SET full_name = COALESCE(EXCLUDED.full_name, customers.full_name),
+            phone     = COALESCE(EXCLUDED.phone,     customers.phone)
+    `;
+    await query(qCust.text, qCust.values);
 
     res.json({ ok: true, userId });
-  } catch (e) {
-    console.error('register error:', e);
-    res.status(500).json({ error: 'server_error', detail: e.message });
+  } catch (err) {
+    console.error('register error:', err);
+    res.status(500).json({ error: 'server_error', detail: err.message });
   }
 });
 
@@ -98,26 +86,21 @@ router.post('/auth/login', async (req, res) => {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'missing_fields' });
 
-    const pool = await getPool();
-    const rs = await pool.request()
-      .input('Email', sql.NVarChar(255), String(email).trim().toLowerCase())
-      .query(`
-        SELECT TOP 1 u.Id, u.Email, u.PasswordHash, u.Role, c.FullName
-        FROM dbo.Users u
-        LEFT JOIN dbo.Customers c ON c.UserId = u.Id
-        WHERE u.Email = @Email
-      `);
+    const q = sqlx`
+      SELECT u.id, u.email, u.password_hash, u.role, c.full_name
+      FROM users u
+      LEFT JOIN customers c ON c.user_id = u.id
+      WHERE u.email = ${String(email).trim().toLowerCase()}
+      LIMIT 1
+    `;
+    const rs = await query(q.text, q.values);
+    if (!rs.rows.length) return res.status(404).json({ error: 'user_not_found' });
 
-    if (!rs.recordset.length) {
-      return res.status(404).json({ error: 'user_not_found' }); // email không tồn tại
-    }
+    const row = rs.rows[0];
+    const ok = await bcrypt.compare(password, row.password_hash).catch(() => false);
+    if (!ok) return res.status(401).json({ error: 'wrong_password' });
 
-    const row = rs.recordset[0];
-    let ok = false;
-    try { ok = await bcrypt.compare(password, row.PasswordHash); } catch {}
-    if (!ok) return res.status(401).json({ error: 'wrong_password' }); // sai mật khẩu
-
-    res.json({ id: row.Id, email: row.Email, role: row.Role, fullName: row.FullName });
+    res.json({ id: row.id, email: row.email, role: row.role, fullName: row.full_name });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'server_error', detail: err.message });
@@ -125,30 +108,30 @@ router.post('/auth/login', async (req, res) => {
 });
 
 /* ---------- Forgot / Reset password ---------- */
+
 // POST /api/auth/forgot  { email }
 router.post('/auth/forgot', async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ error: 'missing_email' });
 
-    const pool = await getPool();
-    await ensureResetTable(pool);
+    await ensureResetTable();
 
-    const u = await pool.request()
-      .input('Email', sql.NVarChar(255), email)
-      .query(`SELECT TOP 1 Id FROM dbo.Users WHERE Email=@Email`);
+    // Tìm user
+    const qU = sqlx`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
+    const u = await query(qU.text, qU.values);
 
     // Luôn trả ok; chỉ gửi mail khi user tồn tại
-    if (u.recordset.length) {
-      const userId = u.recordset[0].Id;
+    if (u.rows.length) {
+      const userId = u.rows[0].id;
       const token = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 phút
 
-      await pool.request()
-        .input('UserId', sql.BigInt, userId)
-        .input('Token', sql.NVarChar(200), token)
-        .input('Exp', sql.DateTime2, expiresAt)
-        .query(`INSERT INTO dbo.PasswordResets (UserId, Token, ExpiresAt) VALUES (@UserId, @Token, @Exp)`);
+      const qIns = sqlx`
+        INSERT INTO password_resets (user_id, token, expires_at)
+        VALUES (${userId}, ${token}, ${expiresAt})
+      `;
+      await query(qIns.text, qIns.values);
 
       const base = process.env.APP_BASE_URL || 'http://localhost:3000';
       const link = `${base}/pages/reset-password.html?token=${encodeURIComponent(token)}`;
@@ -172,17 +155,20 @@ router.post('/auth/forgot', async (req, res) => {
 router.get('/auth/reset/:token', async (req, res) => {
   try {
     const token = String(req.params.token || '');
-    const pool = await getPool();
-    await ensureResetTable(pool);
+    await ensureResetTable();
 
-    const r = await pool.request()
-      .input('Token', sql.NVarChar(200), token)
-      .query(`SELECT TOP 1 UserId, ExpiresAt, UsedAt FROM dbo.PasswordResets WHERE Token=@Token`);
+    const q = sqlx`
+      SELECT user_id, expires_at, used_at
+      FROM password_resets
+      WHERE token = ${token}
+      LIMIT 1
+    `;
+    const r = await query(q.text, q.values);
+    if (!r.rows.length) return res.status(404).json({ error: 'invalid_token' });
 
-    if (!r.recordset.length) return res.status(404).json({ error: 'invalid_token' });
-    const row = r.recordset[0];
-    if (row.UsedAt) return res.status(400).json({ error: 'token_used' });
-    if (new Date(row.ExpiresAt) < new Date()) return res.status(400).json({ error: 'token_expired' });
+    const row = r.rows[0];
+    if (row.used_at) return res.status(400).json({ error: 'token_used' });
+    if (new Date(row.expires_at) < new Date()) return res.status(400).json({ error: 'token_expired' });
 
     res.json({ ok: true });
   } catch (e) {
@@ -196,27 +182,30 @@ router.post('/auth/reset', async (req, res) => {
     const { token, password } = req.body || {};
     if (!token || !password) return res.status(400).json({ error: 'missing_fields' });
 
-    const pool = await getPool();
-    await ensureResetTable(pool);
+    await ensureResetTable();
 
-    const r = await pool.request()
-      .input('Token', sql.NVarChar(200), token)
-      .query(`SELECT TOP 1 Id, UserId, ExpiresAt, UsedAt FROM dbo.PasswordResets WHERE Token=@Token`);
+    const qSel = sqlx`
+      SELECT id, user_id, expires_at, used_at
+      FROM password_resets
+      WHERE token = ${token}
+      LIMIT 1
+    `;
+    const r = await query(qSel.text, qSel.values);
+    if (!r.rows.length) return res.status(404).json({ error: 'invalid_token' });
 
-    if (!r.recordset.length) return res.status(404).json({ error: 'invalid_token' });
-    const pr = r.recordset[0];
-    if (pr.UsedAt) return res.status(400).json({ error: 'token_used' });
-    if (new Date(pr.ExpiresAt) < new Date()) return res.status(400).json({ error: 'token_expired' });
+    const pr = r.rows[0];
+    if (pr.used_at) return res.status(400).json({ error: 'token_used' });
+    if (new Date(pr.expires_at) < new Date()) return res.status(400).json({ error: 'token_expired' });
 
     const hash = await bcrypt.hash(String(password), 10);
-    await pool.request()
-      .input('UserId', sql.BigInt, pr.UserId)
-      .input('Hash', sql.NVarChar(255), hash)
-      .query(`UPDATE dbo.Users SET PasswordHash=@Hash WHERE Id=@UserId`);
 
-    await pool.request()
-      .input('Id', sql.BigInt, pr.Id)
-      .query(`UPDATE dbo.PasswordResets SET UsedAt=SYSUTCDATETIME() WHERE Id=@Id`);
+    // update password
+    const qUpd = sqlx`UPDATE users SET password_hash = ${hash} WHERE id = ${pr.user_id}`;
+    await query(qUpd.text, qUpd.values);
+
+    // mark used
+    const qUsed = sqlx`UPDATE password_resets SET used_at = NOW() WHERE id = ${pr.id}`;
+    await query(qUsed.text, qUsed.values);
 
     res.json({ ok: true });
   } catch (e) {
@@ -228,42 +217,49 @@ router.post('/auth/reset', async (req, res) => {
 /* ============== HEALING EVENTS (MAP) ============== */
 router.get('/healing-events', async (req, res) => {
   try {
-    const pool = await getPool();
     const { bbox = '', city = '', category = '', q = '' } = req.query;
 
-    let hasBbox = 0, minLng = null, minLat = null, maxLng = null, maxLat = null;
+    const clauses = ['published = true'];
+    const params = [];
+    let i = 1;
+
+    if (q) {
+      clauses.push(`(title ILIKE '%' || $${i} || '%' OR venue_name ILIKE '%' || $${i} || '%' OR city ILIKE '%' || $${i} || '%')`);
+      params.push(q);
+      i++;
+    }
+    if (city) {
+      clauses.push(`city = $${i++}`); params.push(city);
+    }
+    if (category) {
+      clauses.push(`category = $${i++}`); params.push(category);
+    }
+
+    // bbox: minLng,minLat,maxLng,maxLat
     if (bbox) {
       const parts = bbox.split(',').map(parseFloat);
       if (parts.length === 4 && parts.every(n => !Number.isNaN(n))) {
-        [minLng, minLat, maxLng, maxLat] = parts;
-        hasBbox = 1;
+        const [minLng, minLat, maxLng, maxLat] = parts;
+        clauses.push(`lat BETWEEN $${i} AND $${i + 1}`);
+        params.push(minLat, maxLat);
+        i += 2;
+        clauses.push(`lng BETWEEN $${i} AND $${i + 1}`);
+        params.push(minLng, maxLng);
+        i += 2;
       }
     }
 
-    const request = pool.request()
-      .input('q', sql.NVarChar, q || '')
-      .input('city', sql.NVarChar, city || '')
-      .input('category', sql.NVarChar, category || '')
-      .input('hasBbox', sql.Int, hasBbox)
-      .input('minLng', sql.Decimal(9, 6), minLng)
-      .input('maxLng', sql.Decimal(9, 6), maxLng)
-      .input('minLat', sql.Decimal(9, 6), minLat)
-      .input('maxLat', sql.Decimal(9, 6), maxLat);
+    const sql = `
+      SELECT id, slug, title, category, city,
+             venue_name, venue_address, lat, lng,
+             start_time, end_time, price_cents, currency, thumbnail_url
+      FROM events
+      WHERE ${clauses.join(' AND ')}
+      ORDER BY start_time DESC
+    `;
 
-    const result = await request.query(`
-      SELECT Id, Slug, Title, Category, City,
-             VenueName, VenueAddress, Lat, Lng,
-             StartTime, EndTime, PriceCents, Currency, ThumbnailUrl
-      FROM dbo.Events
-      WHERE Published = 1
-        AND (@q = N'' OR Title LIKE N'%'+@q+'%' OR VenueName LIKE N'%'+@q+'%' OR City LIKE N'%'+@q+'%')
-        AND (@city = N'' OR City = @city)
-        AND (@category = N'' OR Category = @category)
-        AND ( @hasBbox = 0 OR (Lng BETWEEN @minLng AND @maxLng AND Lat BETWEEN @minLat AND @maxLat) )
-      ORDER BY StartTime DESC
-    `);
-
-    res.json(result.recordset);
+    const r = await query(sql, params);
+    res.json(r.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'server_error', detail: err.message });
@@ -271,11 +267,10 @@ router.get('/healing-events', async (req, res) => {
 });
 
 /* ============== PING DB (test) ============== */
-router.get('/ping-db', async (req, res) => {
+router.get('/ping-db', async (_req, res) => {
   try {
-    const pool = await getPool();
-    const rs = await pool.request().query('SELECT 1 AS ok');
-    res.json({ ok: rs.recordset[0].ok });
+    const r = await query('SELECT 1 AS ok', []);
+    res.json({ ok: r.rows[0].ok });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -287,23 +282,18 @@ router.get('/events/:slug', async (req, res) => {
     const slug = req.params.slug;
     if (!slug) return res.status(400).json({ error: 'missing_slug' });
 
-    const pool = await getPool();
-    const q = `
-      SELECT TOP 1 Id, Slug, Title, Category, City, VenueName, VenueAddress,
-             StartTime, EndTime, Capacity, PriceCents, Currency,
-             Description, Benefits, Requirements,
-             ThumbnailUrl, BannerUrl, Lat, Lng
-      FROM dbo.Events
-      WHERE Slug = @Slug
+    const q = sqlx`
+      SELECT id, slug, title, category, city, venue_name, venue_address,
+             start_time, end_time, capacity, price_cents, currency,
+             description, benefits, requirements,
+             thumbnail_url, banner_url, lat, lng
+      FROM events
+      WHERE slug = ${slug}
+      LIMIT 1
     `;
-    const r = await pool.request()
-      .input('Slug', sql.VarChar(120), slug)
-      .query(q);
-
-    if (!r.recordset.length) {
-      return res.status(404).json({ error: 'not_found' });
-    }
-    return res.json(r.recordset[0]);
+    const r = await query(q.text, q.values);
+    if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+    return res.json(r.rows[0]);
   } catch (err) {
     console.error('Get event detail error:', err);
     res.status(500).json({ error: 'server_error', detail: err.message });

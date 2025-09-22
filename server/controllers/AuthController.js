@@ -1,5 +1,5 @@
 const bcrypt = require("bcryptjs");
-const { sql, getPool } = require("../config/db");
+const { query, sqlx } = require("../config/db"); // đổi sang adapter Postgres
 
 const AuthController = {
   async register(req, res) {
@@ -9,40 +9,30 @@ const AuthController = {
         return res.status(400).json({ error: "Thiếu dữ liệu" });
       }
 
-      const pool = await getPool();
-
       // check email trùng
-      const exist = await pool.request()
-        .input("email", sql.NVarChar, email)
-        .query("SELECT 1 FROM Users WHERE Email=@email");
-      if (exist.recordset.length) {
+      const qExist = sqlx`SELECT 1 FROM users WHERE email = ${email}`;
+      const exist = await query(qExist.text, qExist.values);
+      if (exist.rows.length) {
         return res.status(409).json({ error: "Email đã tồn tại" });
       }
 
       const hash = await bcrypt.hash(password, 10);
 
-      // insert Users
-      const u = await pool.request()
-        .input("email", sql.NVarChar, email)
-        .input("hash", sql.NVarChar, hash)
-        .input("role", sql.VarChar, "customer")
-        .query(`
-          INSERT INTO Users (Email, PasswordHash, Role)
-          VALUES (@email, @hash, @role);
-          SELECT CAST(SCOPE_IDENTITY() AS BIGINT) AS UserId;
-        `);
-      const userId = u.recordset[0].UserId;
+      // insert user
+      const qUser = sqlx`
+        INSERT INTO users (email, password_hash, role)
+        VALUES (${email}, ${hash}, ${"customer"})
+        RETURNING id
+      `;
+      const u = await query(qUser.text, qUser.values);
+      const userId = u.rows[0].id;
 
-      // insert Customers
-      await pool.request()
-        .input("userId", sql.BigInt, userId)
-        .input("fullName", sql.NVarChar, fullName)
-        .input("email", sql.NVarChar, email)
-        .input("phone", sql.NVarChar, phone || null)
-        .query(`
-          INSERT INTO Customers (UserId, FullName, Email, Phone)
-          VALUES (@userId, @fullName, @email, @phone)
-        `);
+      // insert customer
+      const qCustomer = sqlx`
+        INSERT INTO customers (user_id, full_name, email, phone)
+        VALUES (${userId}, ${fullName}, ${email}, ${phone || null})
+      `;
+      await query(qCustomer.text, qCustomer.values);
 
       res.json({ userId, email });
     } catch (err) {
@@ -54,28 +44,27 @@ const AuthController = {
   async login(req, res) {
     try {
       const { email, password } = req.body;
-      const pool = await getPool();
 
-      const r = await pool.request()
-        .input("email", sql.NVarChar, email)
-        .query(`
-          SELECT u.Id AS UserId, u.Email, u.PasswordHash, u.Role,
-                 c.Id AS CustomerId, c.FullName
-          FROM Users u
-          LEFT JOIN Customers c ON c.UserId = u.Id
-          WHERE u.Email=@email
-        `);
-      if (!r.recordset.length) return res.status(401).json({ error: "Sai email hoặc mật khẩu" });
+      const q = sqlx`
+        SELECT u.id AS user_id, u.email, u.password_hash, u.role,
+               c.id AS customer_id, c.full_name
+        FROM users u
+        LEFT JOIN customers c ON c.user_id = u.id
+        WHERE u.email = ${email}
+      `;
+      const r = await query(q.text, q.values);
 
-      const row = r.recordset[0];
-      const ok = await bcrypt.compare(password, row.PasswordHash);
+      if (!r.rows.length) return res.status(401).json({ error: "Sai email hoặc mật khẩu" });
+
+      const row = r.rows[0];
+      const ok = await bcrypt.compare(password, row.password_hash);
       if (!ok) return res.status(401).json({ error: "Sai email hoặc mật khẩu" });
 
       res.json({
-        userId: row.UserId,
-        role: row.Role,
-        fullName: row.FullName,
-        email: row.Email,
+        userId: row.user_id,
+        role: row.role,
+        fullName: row.full_name,
+        email: row.email,
       });
     } catch (err) {
       console.error(err);

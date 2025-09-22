@@ -1,80 +1,98 @@
-const { sql, getPool } = require("../config/db");
+// controllers/mapController.js (ví dụ)
+const { query } = require("../config/db"); // dùng adapter Postgres
 
 module.exports = {
-  // Lấy danh sách KHÔNG GIAN (nếu có bảng Spaces) + filter theo bbox, city, keyword
+  // Lấy danh sách không gian chữa lành (healing_spaces)
   async listSpaces(req, res) {
     try {
       const { bbox, city, q } = req.query; // bbox = "minLng,minLat,maxLng,maxLat"
-      const pool = await getPool();
 
-      let where = "1=1";
-      if (city) where += " AND City = @city";
-      if (q)    where += " AND (Name LIKE '%' + @q + '%' OR Address LIKE '%' + @q + '%')";
+      // Xây WHERE động theo tham số
+      const clauses = ["1=1"];
+      const params = [];
+      let i = 1;
 
-      // filter theo bounding box (nếu có bbox)
-      let bboxFilter = "";
+      if (city) {
+        clauses.push(`city = $${i++}`);
+        params.push(city);
+      }
+      if (q) {
+        // tìm theo tên/địa chỉ (không phân biệt hoa thường)
+        clauses.push(`(name ILIKE '%' || $${i} || '%' OR address ILIKE '%' || $${i} || '%')`);
+        params.push(q);
+        i++;
+      }
       if (bbox) {
         const [minLng, minLat, maxLng, maxLat] = bbox.split(",").map(Number);
-        bboxFilter = " AND Lat BETWEEN @minLat AND @maxLat AND Lng BETWEEN @minLng AND @maxLng";
+        clauses.push(`lat BETWEEN $${i} AND $${i + 1}`);
+        params.push(minLat, maxLat);
+        i += 2;
+        clauses.push(`lng BETWEEN $${i} AND $${i + 1}`);
+        params.push(minLng, maxLng);
+        i += 2;
       }
 
-      const r = await pool.request()
-        .input("city", sql.NVarChar, city || null)
-        .input("q", sql.NVarChar, q || null)
-        .input("minLat", sql.Decimal(9,6), bbox ? bbox.split(",")[1] : null)
-        .input("maxLat", sql.Decimal(9,6), bbox ? bbox.split(",")[3] : null)
-        .input("minLng", sql.Decimal(9,6), bbox ? bbox.split(",")[0] : null)
-        .input("maxLng", sql.Decimal(9,6), bbox ? bbox.split(",")[2] : null)
-        .query(`
-          SELECT Id, Name, City, Address, Lat, Lng, CoverUrl
-          FROM Spaces
-          WHERE ${where} ${bbox ? bboxFilter : ""}
-          ORDER BY Name
-        `);
+      const sql = `
+        SELECT id, name, city, address, lat, lng,
+               thumbnail_url AS cover_url
+        FROM healing_spaces
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY name
+      `;
 
-      res.json(r.recordset);
+      const { rows } = await query(sql, params);
+      res.json(rows);
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: "Load spaces failed" });
     }
   },
 
-  // Nếu KHÔNG có bảng Spaces: trả về sự kiện có lat/lng để thả marker
+  // Trả về events có lat/lng để thả marker
   async listEventsOnMap(req, res) {
     try {
       const { bbox, city, q, category } = req.query;
-      const pool = await getPool();
 
-      let where = "Published=1 AND VenueLat IS NOT NULL AND VenueLng IS NOT NULL";
-      if (city) where += " AND City = @city";
-      if (category) where += " AND Category = @category";
-      if (q) where += " AND (Title LIKE '%' + @q + '%' OR VenueName LIKE '%' + @q + '%')";
+      const clauses = ["published = true", "lat IS NOT NULL", "lng IS NOT NULL"];
+      const params = [];
+      let i = 1;
 
-      let bboxFilter = "";
+      if (city) {
+        clauses.push(`city = $${i++}`);
+        params.push(city);
+      }
+      if (category) {
+        clauses.push(`category = $${i++}`);
+        params.push(category);
+      }
+      if (q) {
+        clauses.push(`(title ILIKE '%' || $${i} || '%' OR venue_name ILIKE '%' || $${i} || '%')`);
+        params.push(q);
+        i++;
+      }
       if (bbox) {
         const [minLng, minLat, maxLng, maxLat] = bbox.split(",").map(Number);
-        bboxFilter =
-          " AND VenueLat BETWEEN @minLat AND @maxLat AND VenueLng BETWEEN @minLng AND @maxLng";
+        clauses.push(`lat BETWEEN $${i} AND $${i + 1}`);
+        params.push(minLat, maxLat);
+        i += 2;
+        clauses.push(`lng BETWEEN $${i} AND $${i + 1}`);
+        params.push(minLng, maxLng);
+        i += 2;
       }
 
-      const r = await pool.request()
-        .input("city", sql.NVarChar, city || null)
-        .input("category", sql.NVarChar, category || null)
-        .input("q", sql.NVarChar, q || null)
-        .input("minLat", sql.Decimal(9,6), bbox ? bbox.split(",")[1] : null)
-        .input("maxLat", sql.Decimal(9,6), bbox ? bbox.split(",")[3] : null)
-        .input("minLng", sql.Decimal(9,6), bbox ? bbox.split(",")[0] : null)
-        .input("maxLng", sql.Decimal(9,6), bbox ? bbox.split(",")[2] : null)
-        .query(`
-          SELECT Id, Slug, Title, Category, City, VenueName, VenueAddress,
-                 VenueLat AS Lat, VenueLng AS Lng,
-                 PriceCents, Currency, ThumbnailUrl, StartTime, EndTime
-          FROM Events
-          WHERE ${where} ${bbox ? bboxFilter : ""}
-          ORDER BY StartTime ASC
-        `);
+      const sql = `
+        SELECT id, slug, title, category, city,
+               venue_name, venue_address,
+               lat, lng,
+               price_cents, currency,
+               thumbnail_url, start_time, end_time
+        FROM events
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY start_time ASC
+      `;
 
-      res.json(r.recordset);
+      const { rows } = await query(sql, params);
+      res.json(rows);
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: "Load events failed" });

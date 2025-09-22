@@ -1,26 +1,26 @@
 // server/routes/partners.js
 const express = require('express');
 const router = express.Router();
-const { sql, getPool } = require('../config/db');
+const { query, sqlx } = require('../config/db');
 
 // Helpers
 const toStr = (v) => (typeof v === 'string' ? v.trim() : null);
-const isEmail = (s='') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+const isEmail = (s = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
-// POST /api/partners/register  -> PartnerApplications
+// POST /api/partners/register  -> partner_applications
 router.post('/partners/register', async (req, res) => {
   try {
     const payload = req.body || {};
 
-    const venueName = toStr(payload.venueName);     // -> SpaceName
-    const spaceType = toStr(payload.spaceType);     // -> SpaceType
-    const desc      = toStr(payload.desc);          // -> SpaceDesc
-    const address   = toStr(payload.address);       // -> AddressLine
-    const city      = toStr(payload.city);          // -> City
-    const region    = toStr(payload.district);      // -> Region
-    const email     = toStr(payload.email);
-    const phone     = toStr(payload.phone);
-    const agreeTos  = !!payload.agreeTos;           // -> AgreeTos (bit)
+    const venueName = toStr(payload.venueName); // -> space_name
+    const spaceType = toStr(payload.spaceType);
+    const desc = toStr(payload.desc);
+    const address = toStr(payload.address);
+    const city = toStr(payload.city);
+    const region = toStr(payload.district);
+    const email = toStr(payload.email);
+    const phone = toStr(payload.phone);
+    const agreeTos = !!payload.agreeTos;
 
     // validate tối thiểu
     if (!venueName || !email || !city) {
@@ -30,99 +30,69 @@ router.post('/partners/register', async (req, res) => {
       return res.status(400).json({ error: 'invalid_email' });
     }
 
-    const pool = await getPool();
-
-    // (optional) tránh spam trùng email + name + city trong 1 ngày
-    await pool.request()
-      .input('Email', sql.NVarChar(200), email)
-      .input('SpaceName', sql.NVarChar(200), venueName)
-      .input('City', sql.NVarChar(100), city)
-      .query(`
-        IF EXISTS (
-          SELECT 1 FROM PartnerApplications
-          WHERE ContactEmail = @Email
-            AND SpaceName = @SpaceName
-            AND City = @City
-            AND CreatedAt >= DATEADD(day, -1, GETUTCDATE())
-        )
-        THROW 50001, 'duplicate_application', 1;
-      `).catch(e => {
-        if (e && e.number === 50001) {
-          throw Object.assign(new Error('duplicate_application'), { http: 409 });
-        }
-        throw e;
-      });
-
-    const r = await pool.request()
-      .input('SpaceName',     sql.NVarChar(200), venueName)
-      .input('SpaceType',     sql.NVarChar(100), spaceType)
-      .input('SpaceDesc',     sql.NVarChar(sql.MAX), desc)
-      .input('AddressLine',   sql.NVarChar(300), address)
-      .input('City',          sql.NVarChar(100), city)
-      .input('Region',        sql.NVarChar(100), region)
-      .input('ContactEmail',  sql.NVarChar(200), email)
-      .input('ContactPhone',  sql.NVarChar(50),  phone)
-      .input('AgreeTos',      sql.Bit,           agreeTos)
-      .input('Status',        sql.NVarChar(50),  'pending')
-      .query(`
-        INSERT INTO PartnerApplications
-          (SpaceName, SpaceType, SpaceDesc, AddressLine, City, Region,
-           ContactEmail, ContactPhone, AgreeTos, Status, CreatedAt)
-        OUTPUT INSERTED.*
-        VALUES
-          (@SpaceName, @SpaceType, @SpaceDesc, @AddressLine, @City, @Region,
-           @ContactEmail, @ContactPhone, @AgreeTos, @Status, GETUTCDATE())
-      `);
-
-    const row = r.recordset?.[0];
-    return res.status(201).json({
-      id: row?.Id,
-      ok: true,
-      record: row
-    });
-  } catch (err) {
-    if (err.http === 409) {
+    // tránh spam trùng (email + space_name + city trong 1 ngày)
+    const qDup = sqlx`
+      SELECT 1
+      FROM partner_applications
+      WHERE contact_email = ${email}
+        AND space_name = ${venueName}
+        AND city = ${city}
+        AND created_at >= NOW() - INTERVAL '1 day'
+      LIMIT 1
+    `;
+    const dup = await query(qDup.text, qDup.values);
+    if (dup.rows.length) {
       return res.status(409).json({ error: 'duplicate_application' });
     }
+
+    // insert
+    const qIns = sqlx`
+      INSERT INTO partner_applications
+        (space_name, space_type, space_desc, address_line, city, region,
+         contact_email, contact_phone, agree_tos, status, created_at)
+      VALUES
+        (${venueName}, ${spaceType}, ${desc}, ${address}, ${city}, ${region},
+         ${email}, ${phone}, ${agreeTos}, ${'pending'}, NOW())
+      RETURNING *
+    `;
+    const r = await query(qIns.text, qIns.values);
+    const row = r.rows?.[0];
+
+    return res.status(201).json({ id: row?.id, ok: true, record: row });
+  } catch (err) {
     console.error('POST /partners/register', err);
-    return res.status(500).json({ error: 'server_error' });
+    return res.status(500).json({ error: 'server_error', detail: err.message });
   }
 });
 
-// GET /api/partners  -> list (kèm SpaceDesc tóm tắt)
+// GET /api/partners  -> list
 router.get('/partners', async (_req, res) => {
   try {
-    const pool = await getPool();
-    const q = await pool.request().query(`
-      SELECT TOP 200
-        Id, SpaceName, SpaceType, SpaceDesc, AddressLine, City, Region,
-        ContactEmail, ContactPhone, Status, CreatedAt,
-        CAST(SpaceDesc AS NVARCHAR(300)) AS SpaceDesc
-      FROM PartnerApplications
-      ORDER BY CreatedAt DESC
-    `);
-    res.json(q.recordset || []);
+    const r = await query(`
+      SELECT id, space_name, space_type,
+             LEFT(space_desc, 300) AS space_desc,
+             address_line, city, region,
+             contact_email, contact_phone, status, created_at
+      FROM partner_applications
+      ORDER BY created_at DESC
+      LIMIT 200
+    `, []);
+    res.json(r.rows || []);
   } catch (err) {
     console.error('GET /partners', err);
     res.status(500).json({ error: 'server_error' });
   }
 });
 
-// GET /api/partners/:id  -> chi tiết
+// GET /api/partners/:id -> chi tiết
 router.get('/partners/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid_id' });
 
-    const pool = await getPool();
-    const r = await pool.request()
-      .input('Id', sql.Int, id)
-      .query(`
-        SELECT *
-        FROM PartnerApplications
-        WHERE Id = @Id
-      `);
-    const row = r.recordset?.[0];
+    const q = sqlx`SELECT * FROM partner_applications WHERE id = ${id} LIMIT 1`;
+    const r = await query(q.text, q.values);
+    const row = r.rows?.[0];
     if (!row) return res.status(404).json({ error: 'not_found' });
     res.json(row);
   } catch (err) {

@@ -1,16 +1,22 @@
-const { sql, getPool } = require('../config/db');
+const { query, sqlx } = require('../config/db');
 
 // Lấy user từ header x-user-id (client gửi kèm mỗi request sau khi login)
 async function getUserFromHeader(req) {
   const id = req.header('x-user-id');
   if (!id) return null;
-  const pool = await getPool();
-  const rs = await pool.request().input('Id', sql.BigInt, id)
-    .query('SELECT TOP 1 Id, Email, Role, FullName FROM dbo.Users WHERE Id=@Id');
-  return rs.recordset[0] || null;
+
+  const q = sqlx`
+    SELECT u.id, u.email, u.role, c.full_name
+    FROM users u
+    LEFT JOIN customers c ON c.user_id = u.id
+    WHERE u.id = ${id}
+    LIMIT 1
+  `;
+  const rs = await query(q.text, q.values);
+  return rs.rows[0] || null;
 }
 
-// server/middleware/auth.js
+// Middleware: yêu cầu có user
 function requireAuth(req, res, next) {
   const id = req.header('x-user-id');
   const role = req.header('x-user-role'); // FE gửi kèm sau khi login
@@ -20,7 +26,7 @@ function requireAuth(req, res, next) {
 }
 
 /**
- * roleNeeded: 'manager' | 'admin' | string[]  (VD: ['manager','admin'])
+ * roleNeeded: 'manager' | 'admin' | string[] (VD: ['manager','admin'])
  */
 function requireRole(roleNeeded) {
   const allow = Array.isArray(roleNeeded) ? roleNeeded : [roleNeeded];
@@ -33,9 +39,4 @@ function requireRole(roleNeeded) {
   };
 }
 
-module.exports = { requireAuth, requireRole };
-
-
-
-
-    
+module.exports = { requireAuth, requireRole, getUserFromHeader };
