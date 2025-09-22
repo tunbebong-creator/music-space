@@ -205,28 +205,22 @@ router.post('/auth/reset', async (req, res) => {
 });
 
 /* ============== HEALING EVENTS (MAP) ============== */
+// GET /api/healing-events
 router.get('/healing-events', async (req, res) => {
   try {
     const { bbox = '', city = '', category = '', q = '' } = req.query;
 
-    const clauses = ['published = true'];
-    const params = [];
-    let i = 1;
+    // tham số tìm kiếm (NULL nếu không dùng)
+    const pSearch = q ? `%${q}%` : null;
+    const pCity = city ? `%${city}%` : null;
+    const pCategory = category ? `%${category}%` : null;
 
-    if (q) {
-      clauses.push(`(title ILIKE '%' || $${i} || '%' OR venue_name ILIKE '%' || $${i} || '%' OR city ILIKE '%' || $${i} || '%')`);
-      params.push(q);
-      i++;
-    }
-    if (city) { clauses.push(`city = $${i++}`); params.push(city); }
-    if (category) { clauses.push(`category = $${i++}`); params.push(category); }
-
+    // bbox: minLng,minLat,maxLng,maxLat  (NULL nếu không hợp lệ)
+    let minLng = null, minLat = null, maxLng = null, maxLat = null;
     if (bbox) {
-      const parts = bbox.split(',').map(parseFloat);
-      if (parts.length === 4 && parts.every(n => !Number.isNaN(n))) {
-        const [minLng, minLat, maxLng, maxLat] = parts;
-        clauses.push(`lat BETWEEN $${i} AND $${i + 1}`); params.push(minLat, maxLat); i += 2;
-        clauses.push(`lng BETWEEN $${i} AND $${i + 1}`); params.push(minLng, maxLng); i += 2;
+      const parts = String(bbox).split(',').map(v => parseFloat(v.trim()));
+      if (parts.length === 4 && parts.every(n => Number.isFinite(n))) {
+        [minLng, minLat, maxLng, maxLat] = parts;
       }
     }
 
@@ -235,17 +229,26 @@ router.get('/healing-events', async (req, res) => {
              venue_name, venue_address, lat, lng,
              start_time, end_time, price_cents, currency, thumbnail_url
       FROM events
-      WHERE ${clauses.join(' AND ')}
-      ORDER BY start_time DESC
+      WHERE published = true
+        AND ($1::text IS NULL OR (title ILIKE $1 OR venue_name ILIKE $1 OR city ILIKE $1))
+        AND ($2::text IS NULL OR city ILIKE $2)
+        AND ($3::text IS NULL OR category ILIKE $3)
+        AND (
+          $4::float8 IS NULL OR $5::float8 IS NULL OR $6::float8 IS NULL OR $7::float8 IS NULL
+          OR (lat BETWEEN $5 AND $7 AND lng BETWEEN $4 AND $6)
+        )
+      ORDER BY COALESCE(start_time, created_at) DESC
     `;
 
+    const params = [pSearch, pCity, pCategory, minLng, minLat, maxLng, maxLat];
     const r = await query(sql, params);
-    res.json(r.rows);
+    res.json(r.rows || []);
   } catch (err) {
-    console.error(err);
+    console.error('healing-events error:', err);
     res.status(500).json({ error: 'server_error', detail: err.message });
   }
 });
+
 
 
 /* ============== PING DB (test) ============== */
