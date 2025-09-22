@@ -1,21 +1,10 @@
 // server/routes/bookings.js
 const express = require('express');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const router = express.Router();
 
-const { pool, query, sqlx } = require('../config/db'); // pg adapter
-
-/* ------------ mailer ------------- */
-function mailer() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: Number(process.env.SMTP_PORT || 465) === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    tls: { minVersion: 'TLSv1.2' },
-  });
-}
+const { pool, query, sqlx } = require('../config/db'); // pg adapter (CÓ pool)
+const { sendMail } = require('../config/mail');        // mail chung
 
 function emailHtml(b) {
   const amount =
@@ -40,31 +29,32 @@ function emailHtml(b) {
 
 /* ============================================================
    POST /api/bookings  { slug, method, name, email, phone, quantity }
-   - giữ chỗ an toàn bằng transaction + FOR UPDATE
 ============================================================ */
 router.post('/', async (req, res) => {
   const { slug, method = 'cash', name, email, phone } = req.body || {};
   const qty = Math.max(1, parseInt(req.body?.quantity, 10) || 1);
 
-  if (!slug || !name || !email || !phone)
+  if (!slug || !name || !email || !phone) {
     return res.status(400).json({ error: 'missing_fields' });
+  }
 
   let client;
   try {
+    if (!pool || typeof pool.connect !== 'function') {
+      throw new Error('DB pool is not available');
+    }
+
     client = await pool.connect();
     await client.query('BEGIN');
 
-    // 1) Chốt event + khoá hàng
-    // cũ (ví dụ)
+    // 1) Khóa event theo slug
     const qEv = sqlx`
-  SELECT id, title, capacity, price_cents, currency, start_time
-  FROM events
-  WHERE lower(slug) = lower(${slug})
-  LIMIT 1
-  FOR UPDATE
-`;
-
-
+      SELECT id, title, capacity, price_cents, currency, start_time
+      FROM events
+      WHERE lower(slug) = lower(${slug})
+      LIMIT 1
+      FOR UPDATE
+    `;
     const evr = await client.query(qEv.text, qEv.values);
     if (!evr.rows.length) {
       await client.query('ROLLBACK');
@@ -108,8 +98,7 @@ router.post('/', async (req, res) => {
 
     // 4) Gửi mail (ngoài transaction)
     try {
-      await mailer().sendMail({
-        from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      await sendMail({
         to: email,
         subject: `Vé giữ chỗ • ${ev.title}`,
         html: emailHtml({
@@ -121,10 +110,10 @@ router.post('/', async (req, res) => {
           status: 'pending',
           event_title: ev.title,
           start_time: ev.start_time,
-          customer_name: name
+          customer_name: name,
         }),
       });
-      // cập nhật sent_at (không cần chặn flow nếu lỗi)
+      // cập nhật sent_at (không chặn flow nếu lỗi)
       await query('UPDATE event_bookings SET sent_at = NOW() WHERE id = $1', [bookingId]);
     } catch (mailErr) {
       console.warn('send mail failed:', mailErr.message);
@@ -137,12 +126,59 @@ router.post('/', async (req, res) => {
       redirect: `/pages/booking-success.html?code=${encodeURIComponent(code)}`
     });
   } catch (e) {
-    if (client) { try { await client.query('ROLLBACK'); } catch { } }
+    if (client) { try { await client.query('ROLLBACK'); } catch {} }
     console.error('bookings/create error:', e);
     return res.status(500).json({ error: 'server_error', detail: e.message });
   } finally {
     if (client) client.release();
   }
 });
+
+/* ============================================================
+   GET /api/bookings/by-code/:code  -> trả thông tin vé (PascalCase)
+   (alias) GET /api/bookings/:code
+============================================================ */
+async function getByCode(req, res) {
+  try {
+    const code = String(req.params.code || '').trim();
+    if (!code) return res.status(400).json({ error: 'missing_code' });
+
+    const q = sqlx`
+      SELECT
+        b.code           AS "Code",
+        b.quantity       AS "Quantity",
+        b.amount_cents   AS "AmountCents",
+        b.method         AS "Method",
+        b.status         AS "Status",
+        b.created_at     AS "CreatedAt",
+        b.sent_at        AS "SentAt",
+        b.customer_name  AS "CustomerName",
+        b.customer_email AS "CustomerEmail",
+        b.customer_phone AS "CustomerPhone",
+        e.id             AS "EventId",
+        e.title          AS "EventTitle",
+        e.slug           AS "Slug",
+        e.start_time     AS "StartTime",
+        e.end_time       AS "EndTime",
+        e.currency       AS "Currency",
+        e.venue_name     AS "VenueName",
+        e.city           AS "City",
+        e.banner_url     AS "BannerUrl",
+        e.thumbnail_url  AS "ThumbnailUrl"
+      FROM event_bookings b
+      JOIN events e ON e.id = b.event_id
+      WHERE UPPER(b.code) = UPPER(${code})
+      LIMIT 1
+    `;
+    const r = await query(q.text, q.values);
+    if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
+    res.json(r.rows[0]);
+  } catch (e) {
+    console.error('get booking by code error:', e);
+    res.status(500).json({ error: 'server_error', detail: e.message });
+  }
+}
+router.get('/by-code/:code', getByCode);
+router.get('/:code', getByCode); // alias
 
 module.exports = router;

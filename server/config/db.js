@@ -1,22 +1,21 @@
 // server/config/db.js
 const { Pool } = require('pg');
 
+// DATABASE_URL trên Render (Neon) dạng: postgres://user:pass@host/db?sslmode=require
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  console.warn('⚠ DATABASE_URL is not set. Check your environment variables.');
-}
 
 const pool = new Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false }, // cần cho Neon / Render
+  ssl: connectionString && !/sslmode=disable/.test(connectionString) ? { rejectUnauthorized: false } : undefined,
 });
 
-// Query helper (dùng cho các câu query đơn lẻ)
+// helper query (dùng cho các route không cần transaction)
 async function query(text, params = []) {
-  return pool.query(text, params);
+  const res = await pool.query(text, params);
+  return res;
 }
 
-// sqlx helper (template literal -> text + values: [$1, $2, ...])
+// helper tagged template -> thay thế $1, $2…
 function sqlx(strings, ...values) {
   let text = '';
   const vals = [];
