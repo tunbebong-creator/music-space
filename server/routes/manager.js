@@ -60,6 +60,13 @@ router.post(
       if (!startTime) return res.status(400).json({ error: 'invalid_start' });
       const endTime = parseDate(b.endTime);
 
+      const thumbFile = req.files?.thumbnail?.[0]?.filename || null;
+      const bannerFile = req.files?.banner?.[0]?.filename || null;
+
+      const priceCents = Number.isFinite(toInt(b.priceCents))
+        ? toInt(b.priceCents)
+        : 0;
+
       const q = sqlx`
         INSERT INTO events
           (slug, title, category, city, venue_name, venue_address,
@@ -70,10 +77,10 @@ router.post(
           (${slug}, ${title}, ${b.category || null}, ${b.city || null},
            ${b.venueName || null}, ${b.venueAddress || null},
            ${startTime}, ${endTime}, ${toInt(b.capacity)},
-           ${toInt(b.priceCents, 0)}, ${b.currency || 'VND'},
+           ${priceCents}, ${b.currency || 'VND'},
            ${b.description || null}, ${b.benefits || null}, ${b.requirements || null},
-           ${req.files?.thumbnail?.[0]?.filename ? '/uploads/' + req.files.thumbnail[0].filename : null},
-           ${req.files?.banner?.[0]?.filename ? '/uploads/' + req.files.banner[0].filename : null},
+           ${thumbFile ? '/uploads/' + thumbFile : null},
+           ${bannerFile ? '/uploads/' + bannerFile : null},
            ${b.lat || null}, ${b.lng || null},
            ${true}, NOW())
         RETURNING id, slug
@@ -87,32 +94,48 @@ router.post(
   }
 );
 
+// List events (alias về PascalCase cho FE cũ)
 router.get('/events', async (_req, res) => {
   try {
-    const r = await query(
-      `SELECT id, slug, title, city, venue_name,
-              start_time, end_time, price_cents, currency, thumbnail_url
-         FROM events
-        ORDER BY COALESCE(end_time, start_time) DESC`,
-      []
-    );
-    res.json(r.rows);
+    const sql = `
+      SELECT
+        id            AS "Id",
+        slug          AS "Slug",
+        title         AS "Title",
+        city          AS "City",
+        venue_name    AS "VenueName",
+        start_time    AS "StartTime",
+        end_time      AS "EndTime",
+        price_cents   AS "PriceCents",
+        currency      AS "Currency",
+        thumbnail_url AS "ThumbnailUrl"
+      FROM events
+      ORDER BY COALESCE(end_time, start_time) DESC
+    `;
+    const r = await query(sql, []);
+    res.json(r.rows || []);
   } catch (e) {
     console.error('list events error:', e);
     res.status(500).json({ error: 'server_error' });
   }
 });
 
+// Recent events (alias)
 router.get('/events/recent', async (_req, res) => {
   try {
     const r = await query(
-      `SELECT id, slug, title, city, start_time
-         FROM events
-        ORDER BY created_at DESC
-        LIMIT 10`,
+      `SELECT
+         id         AS "Id",
+         slug       AS "Slug",
+         title      AS "Title",
+         city       AS "City",
+         start_time AS "StartTime"
+       FROM events
+       ORDER BY created_at DESC
+       LIMIT 10`,
       []
     );
-    res.json(r.rows);
+    res.json(r.rows || []);
   } catch (e) {
     console.error('recent events error:', e);
     res.status(500).json({ error: 'server_error' });
@@ -141,7 +164,7 @@ router.get('/kpi', async (_req, res) => {
 });
 
 /* ============================================================
-   USERS
+   USERS (alias về PascalCase)
 ============================================================ */
 router.get('/users', async (req, res) => {
   try {
@@ -150,25 +173,35 @@ router.get('/users', async (req, res) => {
     if (q) {
       const s = `%${q}%`;
       r = await query(
-        `SELECT u.id, u.email, u.role, u.created_at, c.full_name
-           FROM users u
-           LEFT JOIN customers c ON c.user_id = u.id
-          WHERE u.email ILIKE $1 OR COALESCE(c.full_name,'') ILIKE $1
-          ORDER BY u.created_at DESC
-          LIMIT 200`,
+        `SELECT
+           u.id         AS "Id",
+           u.email      AS "Email",
+           u.role       AS "Role",
+           u.created_at AS "CreatedAt",
+           c.full_name  AS "FullName"
+         FROM users u
+         LEFT JOIN customers c ON c.user_id = u.id
+         WHERE u.email ILIKE $1 OR COALESCE(c.full_name,'') ILIKE $1
+         ORDER BY u.created_at DESC
+         LIMIT 200`,
         [s]
       );
     } else {
       r = await query(
-        `SELECT u.id, u.email, u.role, u.created_at, c.full_name
-           FROM users u
-           LEFT JOIN customers c ON c.user_id = u.id
-          ORDER BY u.created_at DESC
-          LIMIT 200`,
+        `SELECT
+           u.id         AS "Id",
+           u.email      AS "Email",
+           u.role       AS "Role",
+           u.created_at AS "CreatedAt",
+           c.full_name  AS "FullName"
+         FROM users u
+         LEFT JOIN customers c ON c.user_id = u.id
+         ORDER BY u.created_at DESC
+         LIMIT 200`,
         []
       );
     }
-    res.json(r.rows);
+    res.json(r.rows || []);
   } catch (e) {
     console.error('users list error:', e);
     res.status(500).json({ error: 'server_error' });
@@ -191,20 +224,33 @@ router.patch('/users/:id/role', async (req, res) => {
 });
 
 /* ============================================================
-   BOOKINGS
+   BOOKINGS (alias về PascalCase)
 ============================================================ */
 router.get('/bookings', async (_req, res) => {
   try {
     const r = await query(
-      `SELECT b.id, b.code, b.quantity, b.amount_cents, b.method, b.status, b.created_at,
-              b.customer_name, b.customer_email, b.customer_phone,
-              e.id AS event_id, e.title AS event_title, e.slug, e.start_time, e.currency
-         FROM event_bookings b
-         JOIN events e ON e.id = b.event_id
-        ORDER BY b.created_at DESC`,
+      `SELECT
+         b.id             AS "Id",
+         b.code           AS "Code",
+         b.quantity       AS "Quantity",
+         b.amount_cents   AS "AmountCents",
+         b.method         AS "Method",
+         b.status         AS "Status",
+         b.created_at     AS "CreatedAt",
+         b.customer_name  AS "CustomerName",
+         b.customer_email AS "CustomerEmail",
+         b.customer_phone AS "CustomerPhone",
+         e.id             AS "EventId",
+         e.title          AS "EventTitle",
+         e.slug           AS "Slug",
+         e.start_time     AS "StartTime",
+         e.currency       AS "Currency"
+       FROM event_bookings b
+       JOIN events e ON e.id = b.event_id
+       ORDER BY b.created_at DESC`,
       []
     );
-    res.json(r.rows);
+    res.json(r.rows || []);
   } catch (e) {
     console.error('list bookings error:', e);
     res.status(500).json({ error: 'server_error' });
@@ -223,10 +269,16 @@ router.patch('/bookings/:id', async (req, res) => {
       [status, id]
     );
     const r = await query(
-      `SELECT b.*, e.title AS event_title, e.slug, e.start_time, e.currency
-         FROM event_bookings b
-         JOIN events e ON e.id = b.event_id
-        WHERE b.id=$1 LIMIT 1`,
+      `SELECT
+         b.*,
+         e.title      AS "event_title",
+         e.slug       AS "slug",
+         e.start_time AS "start_time",
+         e.currency   AS "currency"
+       FROM event_bookings b
+       JOIN events e ON e.id = b.event_id
+       WHERE b.id=$1
+       LIMIT 1`,
       [id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'not_found' });
