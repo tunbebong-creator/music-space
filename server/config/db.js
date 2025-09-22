@@ -1,23 +1,33 @@
+// server/config/db.js
 const { Pool } = require('pg');
 
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.warn('⚠ DATABASE_URL is not set. Check your environment variables.');
+}
+
 const pool = new Pool({
-  connectionString: process.env.PG_CONNECTION_STRING,
-  ssl: { rejectUnauthorized: false } // Neon yêu cầu SSL
+  connectionString,
+  ssl: { rejectUnauthorized: false }, // cần cho Neon / Render
 });
 
-async function query(text, params) {
-  const res = await pool.query(text, params);
-  return res;
+// Query helper (dùng cho các câu query đơn lẻ)
+async function query(text, params = []) {
+  return pool.query(text, params);
 }
 
+// sqlx helper (template literal -> text + values: [$1, $2, ...])
 function sqlx(strings, ...values) {
-  const text = strings
-    .map((s, i) => s + (i < values.length ? `$${i + 1}` : ''))
-    .join('');
-  return { text, values };
+  let text = '';
+  const vals = [];
+  strings.forEach((s, i) => {
+    text += s;
+    if (i < values.length) {
+      vals.push(values[i]);
+      text += `$${vals.length}`;
+    }
+  });
+  return { text, values: vals };
 }
 
-pool.on('connect', () => console.log('✅ Connected to Neon Postgres'));
-pool.on('error', (err) => console.error('❌ PG pool error:', err));
-
-module.exports = { query, sqlx };
+module.exports = { pool, query, sqlx };
