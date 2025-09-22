@@ -192,10 +192,10 @@ router.post('/auth/reset', async (req, res) => {
     const hash = await bcrypt.hash(String(password), 10);
 
     await query(sqlx`UPDATE users SET password_hash = ${hash} WHERE id = ${pr.user_id}`.text,
-                sqlx`UPDATE users SET password_hash = ${hash} WHERE id = ${pr.user_id}`.values);
+      sqlx`UPDATE users SET password_hash = ${hash} WHERE id = ${pr.user_id}`.values);
 
     await query(sqlx`UPDATE password_resets SET used_at = NOW() WHERE id = ${pr.id}`.text,
-                sqlx`UPDATE password_resets SET used_at = NOW() WHERE id = ${pr.id}`.values);
+      sqlx`UPDATE password_resets SET used_at = NOW() WHERE id = ${pr.id}`.values);
 
     res.json({ ok: true });
   } catch (e) {
@@ -215,7 +215,8 @@ router.get('/healing-events', async (req, res) => {
 
     if (q) {
       clauses.push(`(title ILIKE '%' || $${i} || '%' OR venue_name ILIKE '%' || $${i} || '%' OR city ILIKE '%' || $${i} || '%')`);
-      params.push(q); i++;
+      params.push(q);
+      i++;
     }
     if (city) { clauses.push(`city = $${i++}`); params.push(city); }
     if (category) { clauses.push(`category = $${i++}`); params.push(category); }
@@ -245,6 +246,7 @@ router.get('/healing-events', async (req, res) => {
     res.status(500).json({ error: 'server_error', detail: err.message });
   }
 });
+
 
 /* ============== PING DB (test) ============== */
 router.get('/ping-db', async (_req, res) => {
