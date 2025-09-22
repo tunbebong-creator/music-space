@@ -530,30 +530,49 @@
     // Render “Sự kiện sắp tới” (lấy cùng API /healing-events)
     async function loadUpcoming() {
       try {
-        const res = await fetch('/api/healing-events?q=&city=&category=');
+        const res = await fetch('/api/healing-events'); // không cần query rỗng
         const data = await res.json();
         const grid = document.getElementById('events-grid');
         grid.innerHTML = '';
-        (data || []).slice(0, 9).forEach(ev => {
-          const time = ev.StartTime ? new Date(ev.StartTime).toLocaleString('vi-VN') : '';
-          const price = ev.PriceCents != null ? (ev.PriceCents / 100).toLocaleString('vi-VN') + ' ' + (ev.Currency || 'VND') : 'Miễn phí';
+
+        const list = Array.isArray(data) ? data : [];
+        if (!list.length) {
+          grid.innerHTML = `<p style="grid-column:1/-1;color:#64748b">Chưa có sự kiện.</p>`;
+          return;
+        }
+
+        list.slice(0, 9).forEach(ev => {
+          const title = ev.title || 'Sự kiện';
+          const city = ev.city || '';
+          const venue = ev.venue_name || '';
+          const slug = ev.slug;
+          const thumb = ev.thumbnail_url;     // ví dụ: /uploads/xxx.jpg
+          const start = ev.start_time ? new Date(ev.start_time).toLocaleString('vi-VN') : '';
+          const price = Number.isFinite(ev.price_cents)
+            ? (ev.price_cents / 100).toLocaleString('vi-VN') + ' ' + (ev.currency || 'VND')
+            : 'Miễn phí';
+
           const card = document.createElement('article');
           card.className = 'hs-card';
           card.innerHTML = `
-            ${ev.ThumbnailUrl ? `<img src="${ev.ThumbnailUrl}" alt="${ev.Title || ''}">` : ''}
-            <div class="p">
-              <h3>${ev.Title || ev.Name || 'Sự kiện'}</h3>
-              <div class="meta">
-                ${ev.VenueName ? `<span>📍 ${ev.VenueName}${ev.City ? `, ${ev.City}` : ''}</span>` : (ev.City ? `<span>📍 ${ev.City}</span>` : '')}
-                ${time ? `<span>🗓 ${time}</span>` : ''}
-                ${price ? `<span>💵 ${price}</span>` : ''}
-              </div>
-              ${ev.Slug ? `<a class="arrow" href="/pages/event.html?slug=${ev.Slug}" style="display:inline-block;margin-top:8px;">Xem chi tiết →</a>` : ''}
+          ${thumb ? `<img src="${thumb}" alt="${title}">` : ''}
+          <div class="p">
+            <h3>${title}</h3>
+            <div class="meta">
+              ${venue || city ? `<span>📍 ${[venue, city].filter(Boolean).join(', ')}</span>` : ''}
+              ${start ? `<span>🗓 ${start}</span>` : ''}
+              <span>💵 ${price}</span>
             </div>
-          `;
+            ${slug ? `<a class="arrow" href="/pages/event.html?slug=${encodeURIComponent(slug)}" style="display:inline-block;margin-top:8px;">Xem chi tiết →</a>` : ''}
+          </div>
+        `;
           grid.appendChild(card);
         });
-      } catch (e) { console.warn('loadUpcoming error', e); }
+      } catch (e) {
+        console.warn('loadUpcoming error', e);
+        document.getElementById('events-grid').innerHTML =
+          `<p style="grid-column:1/-1;color:#ef4444">Không tải được danh sách sự kiện.</p>`;
+      }
     }
     document.addEventListener('DOMContentLoaded', loadUpcoming);
   </script>
