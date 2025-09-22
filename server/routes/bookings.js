@@ -55,13 +55,16 @@ router.post('/', async (req, res) => {
     await client.query('BEGIN');
 
     // 1) Chốt event + khoá hàng
+    // cũ (ví dụ)
     const qEv = sqlx`
-      SELECT id, title, capacity, price_cents, currency, start_time
-      FROM events
-      WHERE slug = ${slug}
-      LIMIT 1
-      FOR UPDATE
-    `;
+  SELECT id, title, capacity, price_cents, currency, start_time
+  FROM events
+  WHERE lower(slug) = lower(${slug})
+  LIMIT 1
+  FOR UPDATE
+`;
+
+
     const evr = await client.query(qEv.text, qEv.values);
     if (!evr.rows.length) {
       await client.query('ROLLBACK');
@@ -134,7 +137,7 @@ router.post('/', async (req, res) => {
       redirect: `/pages/booking-success.html?code=${encodeURIComponent(code)}`
     });
   } catch (e) {
-    if (client) { try { await client.query('ROLLBACK'); } catch {} }
+    if (client) { try { await client.query('ROLLBACK'); } catch { } }
     console.error('bookings/create error:', e);
     return res.status(500).json({ error: 'server_error', detail: e.message });
   } finally {
