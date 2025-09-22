@@ -1,5 +1,5 @@
 // ================== CONFIG ==================
-const API_BASE = '/api'; // Nếu backend khác cổng: 'http://localhost:3000/api'
+const API_BASE = '/api';
 
 // ================== HELPERS =================
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -63,7 +63,7 @@ function renderUserInfo(user) {
 $('#btnUser')?.addEventListener('click', openAuth);
 $('.auth-close')?.addEventListener('click', closeAuth);
 $('#auth-modal')?.addEventListener('click', (e) => {
-  if (e.target.id === 'auth-modal') closeAuth(); // click nền để đóng
+  if (e.target.id === 'auth-modal') closeAuth();
 });
 document.querySelectorAll('.auth-tab').forEach(btn =>
   btn.addEventListener('click', () => switchTab(btn.dataset.tab))
@@ -88,7 +88,6 @@ $('#form-login')?.addEventListener('submit', async (e) => {
     localStorage.setItem('ms_user', JSON.stringify(data));
     renderUserInfo(data);
 
-    // ➜ Redirect theo role
     const role = (data.role || '').toLowerCase();
     if (role === 'manager' || role === 'admin') {
       window.location.href = '/pages/manager/manager.html';
@@ -144,15 +143,13 @@ $('#linkHealing')?.addEventListener('click', (e) => {
 // ================== HYDRATE ON LOAD =========
 document.addEventListener('DOMContentLoaded', () => {
   renderUserInfo(getUser());
-  initMap();        // nếu trang có map sẽ tự chạy
-  loadUpcoming();   // nếu trang có #events-grid sẽ tự render
+  initMap();
+  loadUpcoming();
   setupLeafletFixes();
 });
 
 /* =================================================================
    HEALING MAP
-   - Cần div#map trong HTML để bật
-   - API dùng /api/healing-events
 ================================================================= */
 let map, markerLayer;
 
@@ -161,7 +158,6 @@ function initMap() {
   if (!el || typeof L === 'undefined') return;
 
   map = L.map('map', { scrollWheelZoom: true }).setView([16.0471, 108.2062], 6);
-  // expose ra window để _invalidateMap dùng an toàn
   window.map = map;
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -177,13 +173,10 @@ function initMap() {
     timer = setTimeout(loadMarkers, 200);
   });
 
-  // thay đổi search/filter -> reload markers (debounce)
   const debouncedReload = debounce(loadMarkers, 300);
   $('#search-q')?.addEventListener('input', debouncedReload);
   $('#filter-city')?.addEventListener('change', debouncedReload);
   $('#filter-category')?.addEventListener('change', debouncedReload);
-
-  $('#btn-apply')?.addEventListener('click', () => loadMarkers(true));
 }
 
 async function loadMarkers() {
@@ -204,23 +197,23 @@ async function loadMarkers() {
     const rows = await res.json();
 
     (rows || []).forEach(ev => {
-      if (ev.Lat == null || ev.Lng == null) return;
-      const m = L.marker([ev.Lat, ev.Lng]).addTo(markerLayer);
+      if (ev.lat == null || ev.lng == null) return;
+      const m = L.marker([ev.lat, ev.lng]).addTo(markerLayer);
 
-      const price = ev.PriceCents != null ? (ev.PriceCents / 100).toLocaleString('vi-VN') + ' ' + (ev.Currency || 'VND') : '';
-      const time = ev.StartTime ? new Date(ev.StartTime).toLocaleString('vi-VN') : '';
+      const price = ev.price_cents != null ? (ev.price_cents / 100).toLocaleString('vi-VN') + ' ' + (ev.currency || 'VND') : '';
+      const time = ev.start_time ? new Date(ev.start_time).toLocaleString('vi-VN') : '';
       const html = `
         <div style="min-width:220px">
           <div style="display:flex; gap:8px;">
-            ${ev.ThumbnailUrl ? `<img src="${ev.ThumbnailUrl}" style="width:64px;height:64px;object-fit:cover;border-radius:8px">` : ''}
+            ${ev.thumbnail_url ? `<img src="${ev.thumbnail_url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px">` : ''}
             <div>
-              <div style="font-weight:700">${ev.Title || ev.Name || ''}</div>
-              <div style="font-size:12px;color:#64748b">${ev.VenueName || ev.Address || ''}</div>
+              <div style="font-weight:700">${ev.title || ''}</div>
+              <div style="font-size:12px;color:#64748b">${ev.venue_name || ''}</div>
             </div>
           </div>
           ${time ? `<div style="margin-top:6px;font-size:12px">🗓 ${time}</div>` : ''}
           ${price ? `<div style="font-size:12px">💵 ${price}</div>` : ''}
-          ${ev.Slug ? `<a href="/pages/event.html?slug=${ev.Slug}" style="display:inline-block;margin-top:6px;font-size:13px">Xem chi tiết →</a>` : ''}
+          ${ev.slug ? `<a href="/pages/event.html?slug=${ev.slug}" style="display:inline-block;margin-top:6px;font-size:13px">Xem chi tiết →</a>` : ''}
         </div>
       `;
       m.bindPopup(html);
@@ -232,7 +225,6 @@ async function loadMarkers() {
 
 /* =================================================================
    UPCOMING EVENTS (Grid)
-   - Cần div#events-grid trong HTML
 ================================================================= */
 async function loadUpcoming() {
   const wrap = $('#events-grid');
@@ -243,8 +235,8 @@ async function loadUpcoming() {
     const all = await res.json();
 
     const rows = (all || [])
-      .filter(r => r.StartTime)
-      .sort((a, b) => new Date(a.StartTime) - new Date(b.StartTime))
+      .filter(r => r.start_time)
+      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
       .slice(0, 9);
 
     if (!rows.length) {
@@ -253,31 +245,31 @@ async function loadUpcoming() {
     }
 
     wrap.innerHTML = rows.map(ev => {
-      const price = ev.PriceCents != null
-        ? (ev.PriceCents / 100).toLocaleString('vi-VN') + ' ' + (ev.Currency || 'VND')
+      const price = ev.price_cents != null
+        ? (ev.price_cents / 100).toLocaleString('vi-VN') + ' ' + (ev.currency || 'VND')
         : 'Miễn phí';
-      const day = ev.StartTime ? new Date(ev.StartTime).toLocaleDateString('vi-VN') : '';
-      const tStart = ev.StartTime ? new Date(ev.StartTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'}) : '';
-      const tEnd = ev.EndTime ? new Date(ev.EndTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'}) : '';
+      const day = ev.start_time ? new Date(ev.start_time).toLocaleDateString('vi-VN') : '';
+      const tStart = ev.start_time ? new Date(ev.start_time).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}) : '';
+      const tEnd = ev.end_time ? new Date(ev.end_time).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}) : '';
 
       return `
         <article class="hs-card">
-          <img class="hs-card__cover" src="${ev.ThumbnailUrl || '/assets/placeholder.jpg'}" alt="">
+          <img class="hs-card__cover" src="${ev.thumbnail_url || '/assets/placeholder.jpg'}" alt="">
           <div class="hs-card__body">
             <div>
-              ${ev.Category ? `<span class="hs-tag">${ev.Category}</span>` : ''}
-              ${ev.City ? `<span class="hs-tag">${ev.City}</span>` : ''}
+              ${ev.category ? `<span class="hs-tag">${ev.category}</span>` : ''}
+              ${ev.city ? `<span class="hs-tag">${ev.city}</span>` : ''}
             </div>
-            <div class="hs-title">${ev.Title || ''}</div>
+            <div class="hs-title">${ev.title || ''}</div>
             <div class="hs-meta">
               ${day ? `<div>📅 ${day}</div>` : ''}
               ${(tStart && tEnd) ? `<div>⏱ ${tStart} - ${tEnd}</div>` : ''}
-              ${ev.VenueName ? `<div>📍 ${ev.VenueName}</div>` : ''}
+              ${ev.venue_name ? `<div>📍 ${ev.venue_name}</div>` : ''}
             </div>
           </div>
           <div class="hs-card__foot">
             <div class="hs-price">${price}</div>
-            <a class="hs-btn" href="${ev.Slug ? `/pages/event.html?slug=${ev.Slug}` : '#'}">Xem chi tiết</a>
+            <a class="hs-btn" href="${ev.slug ? `/pages/event.html?slug=${ev.slug}` : '#'}">Xem chi tiết</a>
           </div>
         </article>`;
     }).join('');
@@ -288,7 +280,7 @@ async function loadUpcoming() {
 }
 
 /* =================================================================
-   FIX: Leaflet map “trôi/giật” khi scroll/hiện lại
+   FIX Leaflet
 ================================================================= */
 function _invalidateMap() {
   if (window.map && typeof window.map.invalidateSize === 'function') {
@@ -297,19 +289,10 @@ function _invalidateMap() {
 }
 
 function setupLeafletFixes() {
-  // 1) invalidate khi trang load/resize/orientation
   window.addEventListener('load', () => setTimeout(_invalidateMap, 60));
   window.addEventListener('resize', () => setTimeout(_invalidateMap, 60));
   window.addEventListener('orientationchange', () => setTimeout(_invalidateMap, 60));
 
-  // 2) invalidate khi scroll (throttle)
-  let scTimer;
-  window.addEventListener('scroll', () => {
-    clearTimeout(scTimer);
-    scTimer = setTimeout(_invalidateMap, 80);
-  }, { passive: true });
-
-  // 3) invalidate khi map vào viewport
   const mapEl = document.getElementById('map');
   if (mapEl && 'IntersectionObserver' in window) {
     const io = new IntersectionObserver((entries) => {
@@ -318,19 +301,5 @@ function setupLeafletFixes() {
       }
     }, { threshold: 0.2 });
     io.observe(mapEl);
-  }
-
-  // 4) nếu có nút toggle “Bản đồ / Danh sách”
-  const mapBtn  = document.getElementById('view-map');
-  const listBtn = document.getElementById('view-list');
-  if (mapBtn && listBtn && mapEl) {
-    mapBtn.addEventListener('click', () => {
-      mapEl.style.display = 'block';
-      try { window.scrollTo({ top: mapEl.offsetTop - 60, behavior: 'smooth' }); } catch {}
-      setTimeout(_invalidateMap, 40);
-    });
-    listBtn.addEventListener('click', () => {
-      mapEl.style.display = 'none';
-    });
   }
 }
