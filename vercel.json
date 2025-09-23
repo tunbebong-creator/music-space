@@ -1,5 +1,14 @@
 {
-  "buildCommand": "",
-  "outputDirectory": ".",
-  "cleanUrls": true
+  "version": 2,
+  "functions": {
+    "api/server.js": {
+      "runtime": "nodejs18.x",
+      "memory": 512,
+      "maxDuration": 30
+    }
+  },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/server.js" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
 }

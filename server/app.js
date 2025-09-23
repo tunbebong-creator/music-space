@@ -8,11 +8,11 @@ dotenv.config();
 const indexRoutes = require('./routes/index');
 const managerRoutes = require('./routes/manager');
 const partnerRoutes = require('./routes/partners');
-const { query } = require('./config/db'); // Postgres adapter
+const { query } = require('./config/db');
 
 const app = express();
 
-/* -------------------- Middlewares -------------------- */
+// Middlewares
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
@@ -22,44 +22,40 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* -------------------- Static files -------------------- */
-// Uploads (ảnh cover, banner…)
+// Static
 app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
-
-// ✅ Serve toàn bộ file tĩnh từ GỐC repo (index.html, pages/, assets/, js/, ...)
+// serve toàn bộ site tĩnh
 app.use(express.static(path.resolve(__dirname, '..')));
 
-/* -------------------- Health & Pings -------------------- */
+// Health
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 app.get('/api/ping', (_req, res) => res.json({ pong: true }));
 
-/* -------------------- API routes -------------------- */
+// API
 app.use('/api', indexRoutes);
 app.use('/api/manager', managerRoutes);
 app.use('/api', partnerRoutes);
 
-// Bookings (POST /api/bookings, ...)
+// bookings
 try {
   const bookingsRoutes = require('./routes/bookings');
-  // Router trong bookings.js là router.post('/') => endpoint đầy đủ: /api/bookings
   app.use('/api/bookings', bookingsRoutes);
   console.log('✅ Mounted bookings routes under /api/bookings');
 } catch (e) {
   console.log('ℹ️  bookings routes not found, skipping.');
 }
 
-/* -------------------- API 404 fallback -------------------- */
+// API 404
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'not_found' });
 });
 
-/* -------------------- Root route -------------------- */
-// ✅ Bảo đảm truy cập "/" sẽ trả index.html ở gốc repo
+// Root -> index.html
 app.get('/', (_req, res) => {
   res.sendFile(path.resolve(__dirname, '..', 'index.html'));
 });
 
-/* -------------------- DB warm-up -------------------- */
+// Warm-up DB (không blocking)
 (async () => {
   try {
     const r = await query('SELECT 1 AS ok', []);
@@ -69,6 +65,11 @@ app.get('/', (_req, res) => {
   }
 })();
 
-/* -------------------- Start server -------------------- */
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 http://localhost:${PORT}`));
+// ➜ Quan trọng: Khi chạy local (không phải trên Vercel) thì mới listen()
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`🚀 http://localhost:${PORT}`));
+}
+
+// Export để serverless function dùng
+module.exports = app;
