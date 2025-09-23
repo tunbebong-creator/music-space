@@ -130,6 +130,7 @@ router.post('/auth/forgot', async (req, res) => {
       const link = `${base}/pages/reset-password.html?token=${encodeURIComponent(token)}`;
 
 
+
       await mailer().sendMail({
         from: process.env.MAIL_FROM || process.env.SMTP_USER,
         to: email,
