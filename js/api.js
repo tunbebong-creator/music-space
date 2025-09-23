@@ -11,7 +11,7 @@
     location.hostname === '127.0.0.1';
 
   // Base URL cuối cùng
-  const API_BASE = isLocal ? '/api' : '/api';
+  const API_BASE = isLocal ? '/api' : PROD_API_BASE;
 
   // ============ HELPERS ============
   // fetch cơ bản
