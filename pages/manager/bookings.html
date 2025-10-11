@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quản lý vé – Manager</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="/assets/manager-bookings.css" />
+</head>
+
+<body>
+  <main class="page">
+    <div class="topbar">
+      <a class="back" href="/pages/manager/manager.html">← Quay lại</a>
+      <h1>Vé đã đặt</h1>
+    </div>
+
+    <div class="toolbar">
+      <input id="q" placeholder="Tìm tên/email/điện thoại/mã vé…" />
+      <select id="f-status">
+        <option value="">Tất cả trạng thái</option>
+        <option value="pending">Đang chờ</option>
+        <option value="confirmed">Đã thanh toán</option>
+        <option value="cancelled">Đã hủy</option>
+        <option value="checked_in">Đã check-in</option>
+      </select>
+      <button id="btn-clear" class="btn">Xoá lọc</button>
+      <span class="muted" id="total">Tổng: 0</span>
+    </div>
+
+    <div class="table">
+      <table>
+        <thead>
+          <tr>
+            <th>Mã vé</th>
+            <th>Khách</th>
+            <th>Sự kiện</th>
+            <th>SL</th>
+            <th>Giá trị</th>
+            <th>PTTT</th>
+            <th>Trạng thái</th>
+            <th>Thời gian</th>
+            <th style="width:240px"></th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <tr>
+            <td colspan="9" class="muted">Đang tải...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    // ---- Guard ----
+    const u = JSON.parse(localStorage.getItem('ms_user') || 'null');
+    if (!u || !['manager', 'admin'].includes((u.role || '').toLowerCase())) {
+      window.location.href = '/index.html#login';
+    }
+
+    // ---- Helpers ----
+    const HJSON = { 'x-user-id': u.id, 'x-user-role': u.role, 'Content-Type': 'application/json' };
+    const HGET = { 'x-user-id': u.id, 'x-user-role': u.role };
+
+    const $ = s => document.querySelector(s);
+    const $$ = s => Array.from(document.querySelectorAll(s));
+
+    const money = (cents, cur = 'VND') => (Math.round(Number(cents || 0) / 100)).toLocaleString('vi-VN') + ' ' + (cur || 'VND');
+    const dt = t => t ? new Date(t).toLocaleString('vi-VN') : '';
+
+    let ALL = []; // cache
+
+    // Tạo cột hành động theo trạng thái
+    function actionBtns(b) {
+      const canConfirm = String(b.Status).toLowerCase() === 'pending';
+      const canCancel = ['pending', 'confirmed'].includes(String(b.Status).toLowerCase());
+      return `
+      <div class="actions">
+        <button class="btn-mini ${canConfirm ? '' : 'disabled'}" data-act="confirm" data-id="${b.Id}" ${canConfirm ? '' : 'disabled'}>Thanh toán</button>
+        <button class="btn-mini ghost ${canCancel ? '' : 'disabled'}" data-act="cancel" data-id="${b.Id}" ${canCancel ? '' : 'disabled'}>Hủy</button>
+        <button class="btn-mini primary" data-act="send" data-id="${b.Id}">Gửi vé</button>
+      </div>
+    `;
+    }
+
+    // Huy hiệu trạng thái
+    function badge(status) {
+      const s = String(status || '').toLowerCase();
+      return `<span class="badge ${s}">${s}</span>`;
+    }
+
+    function rowHTML(b) {
+      return `
+      <tr id="row-${b.Id}">
+        <td><b>${b.Code}</b></td>
+        <td>
+          <div>${b.CustomerName || ''}</div>
+          <div class="muted" style="font-size:12px">${b.CustomerEmail || ''}${b.CustomerPhone ? ' • ' + b.CustomerPhone : ''}</div>
+        </td>
+        <td>
+          <div>${b.EventTitle || ''}</div>
+          <div class="muted" style="font-size:12px">${b.StartTime ? new Date(b.StartTime).toLocaleString('vi-VN') : ''}</div>
+        </td>
+        <td>${b.Quantity || 1}</td>
+        <td>${money(b.AmountCents, b.Currency)}</td>
+        <td>${(b.Method || '').toUpperCase()}</td>
+        <td>${badge(b.Status)}</td>
+        <td>${dt(b.CreatedAt)}</td>
+        <td style="width:240px">${actionBtns(b)}</td>
+      </tr>
+    `;
+    }
+
+    function render(list) {
+      $('#total').textContent = 'Tổng: ' + (list?.length || 0);
+      const tb = $('#rows');
+      if (!list || !list.length) {
+        tb.innerHTML = `<tr><td colspan="9" class="muted">Không có bản ghi.</td></tr>`;
+        return;
+      }
+      tb.innerHTML = list.map(rowHTML).join('');
+    }
+
+    function applyFilters() {
+      const q = ($('#q').value || '').toLowerCase().trim();
+      const fs = $('#f-status').value;
+      const filtered = (ALL || []).filter(b => {
+        const text = `${b.Code || ''} ${b.CustomerName || ''} ${b.CustomerEmail || ''} ${b.CustomerPhone || ''}`.toLowerCase();
+        const okQ = q ? text.includes(q) : true;
+        const okS = fs ? (String(b.Status || '').toLowerCase() === fs) : true;
+        return okQ && okS;
+      });
+      render(filtered);
+    }
+
+    // ---- API helpers ----
+    async function apiList() {
+      const r = await fetch('/api/manager/bookings', { headers: HGET });
+      if (!r.ok) throw new Error('load_failed');
+      return r.json();
+    }
+    async function apiUpdateStatus(id, status) {
+      const r = await fetch(`/api/manager/bookings/${id}`, {
+        method: 'PATCH',
+        headers: HJSON,
+        body: JSON.stringify({ status })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || d.error || 'update_failed');
+      // backend sẽ trả { ok:true, booking: {...} }
+      return d.booking;
+    }
+
+    async function apiSend(id) {
+      // Khớp backend: /api/manager/bookings/:id/send-ticket
+      const r = await fetch(`/api/manager/bookings/${id}/send-ticket`, { method: 'POST', headers: HGET });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || d.error || 'send_failed');
+      return true;
+    }
+
+    // ---- Click handlers cho 3 nút ----
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      const id = Number(btn.dataset.id);
+      const act = btn.dataset.act;
+
+      btn.disabled = true;
+      try {
+        if (act === 'confirm') {
+          const b = await apiUpdateStatus(id, 'confirmed');
+          const idx = ALL.findIndex(x => x.Id === id);
+          if (idx > -1) ALL[idx] = { ...ALL[idx], ...b };
+          $('#row-' + id).outerHTML = rowHTML(ALL[idx]);
+        } else if (act === 'cancel') {
+          const b = await apiUpdateStatus(id, 'cancelled');
+          const idx = ALL.findIndex(x => x.Id === id);
+          if (idx > -1) ALL[idx] = { ...ALL[idx], ...b };
+          $('#row-' + id).outerHTML = rowHTML(ALL[idx]);
+        } else if (act === 'send') {
+          await apiSend(id);
+          alert('📩 Đã gửi vé qua email.');
+        }
+      } catch (err) {
+        alert('Lỗi: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ---- Tìm kiếm / lọc ----
+    $('#q').addEventListener('input', applyFilters);
+    $('#f-status').addEventListener('change', applyFilters);
+    $('#btn-clear').addEventListener('click', () => { $('#q').value = ''; $('#f-status').value = ''; render(ALL); });
+
+    // ---- Load ban đầu ----
+    (async function init() {
+      try {
+        ALL = await apiList();
+        ALL = (ALL || []).sort((a, b) => new Date(b.CreatedAt || 0) - new Date(a.CreatedAt || 0));
+        render(ALL);
+      } catch (e) {
+        $('#rows').innerHTML = `<tr><td colspan="9" class="muted">Không tải được dữ liệu.</td></tr>`;
+      }
+    })();
+  </script>
+
+</body>
+
+</html>

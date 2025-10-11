@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Healing Space | Music Space</title>
+
+  <!-- Base styles -->
+  <link rel="stylesheet" href="../assets/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    /* --- hero card lớn --- */
+    .hero-box {
+      max-width: 1100px;
+      margin: 20px auto 0;
+      background: linear-gradient(135deg, #e7f6f2, #f5f2ea);
+      border-radius: 22px;
+      padding: 48px 28px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, .08), inset 0 1px 0 rgba(255, 255, 255, .7);
+      text-align: center;
+    }
+
+    .hero-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 16px;
+      background: #fff;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, .08);
+      color: #2563eb;
+      font-size: 30px;
+    }
+
+    .hero-title {
+      font-size: 40px;
+      font-weight: 800;
+      margin: 6px 0 8px;
+      color: #0f172a;
+    }
+
+    .hero-sub {
+      color: #475569;
+      font-size: 16px;
+    }
+
+    /* --- thanh search + filter pill --- */
+    .search-wrap {
+      max-width: 1100px;
+      margin: 22px auto 0;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .search-input {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, .06);
+    }
+
+    .search-input input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      font-size: 14px;
+      color: #0f172a;
+      background: transparent;
+    }
+
+    .pill {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, .06);
+    }
+
+    .pill select {
+      border: 0;
+      background: transparent;
+      outline: none;
+      font-size: 14px;
+      color: #0f172a;
+    }
+
+    /* --- toggle bản đồ / danh sách --- */
+    .view-toggle {
+      max-width: 1100px;
+      margin: 16px auto 12px;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-start;
+    }
+
+    .toggle-btn {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, .06);
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .toggle-btn.active {
+      border-color: #bbf7d0;
+      background: #ecfdf5;
+    }
+
+    /* --- map box --- */
+    #map {
+      height: 560px;
+      max-width: 1100px;
+      margin: 0 auto 36px;
+      border-radius: 22px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .08);
+    }
+
+    /* --- event grid (danh sách) --- */
+    .hs-events.container {
+      max-width: 1100px;
+      margin: 0 auto 60px;
+    }
+
+    .hs-events-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .hs-events-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, .06);
+    }
+
+    .hs-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .hs-card {
+      background: #fff;
+      border: 1px solid #f1eae0;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .06);
+    }
+
+    .hs-card img {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+    }
+
+    .hs-card .p {
+      padding: 12px 14px;
+    }
+
+    .hs-card h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      color: #0f172a;
+    }
+
+    .hs-card .meta {
+      font-size: 12px;
+      color: #64748b;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .partner-cta.container {
+      max-width: 1100px;
+      margin: 20px auto 60px;
+    }
+
+    .partner-cta__inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 16px 18px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .06);
+    }
+
+    .partner-cta__title {
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .partner-cta__btn {
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: #0ea5e9;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    @media (max-width:1024px) {
+      .hero-title {
+        font-size: 32px;
+      }
+
+      .search-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .hs-cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Bắt buộc đăng nhập -->
+  <script>
+    try {
+      const u = JSON.parse(localStorage.getItem('ms_user') || 'null');
+      if (!u) location.replace('../index.html#login');
+    } catch { location.replace('../index.html#login'); }
+  </script>
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a class="brand" href="../index.html">
+        <span class="logo">❤</span>
+        <span><strong>Music</strong> <span class="space">Space</span></span>
+      </a>
+
+      <div class="nav-links">
+        <a href="#" class="chip">✨ I'm Healing</a>
+        <a href="healing-space.html" class="chip" id="linkHealing">🗺 Healing Space</a>
+        <a href="#" class="chip">👥 We Share</a>
+        <a href="#" class="chip">📖 We Read</a>
+      </div>
+
+      <div class="nav-actions">
+        <button class="icon-btn">🔈</button>
+        <div class="user-box">
+          <button class="icon-btn" id="btnUser">👤</button>
+          <div id="user-info"></div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO CARD -->
+  <section class="hero-box">
+    <div class="hero-icon">📍</div>
+    <div class="hero-title">Healing Space</div>
+    <div class="hero-sub">Khám phá không gian và sự kiện âm nhạc chữa lành trên toàn Việt Nam</div>
+  </section>
+
+  <!-- SEARCH + FILTER -->
+  <section class="search-wrap">
+    <div class="search-input">
+      <span style="opacity:.6">🔎</span>
+      <input id="search-q" placeholder="Tìm kiếm theo tên, địa chỉ..." />
+    </div>
+
+    <div class="pill">
+      <span>📍</span>
+      <select id="filter-city">
+        <option value="">Tất cả khu vực</option>
+        <!-- JS sẽ fill 63 tỉnh/thành -->
+      </select>
+    </div>
+
+    <div class="pill">
+      <span>🗂</span>
+      <select id="filter-category">
+        <option value="">Tất cả loại</option>
+        <option value="Sound Healing">Sound Healing</option>
+        <option value="Meditation">Meditation</option>
+        <option value="Acoustic Session">Acoustic Session</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- TOGGLE (cuộn tới khu vực) -->
+  <div class="view-toggle">
+    <button class="toggle-btn active" id="view-map"><span>🗺</span> Bản đồ</button>
+    <button class="toggle-btn" id="view-list"><span>📋</span> Danh sách</button>
+    <button class="chip" id="btn-apply" style="margin-left:8px; display:none;">Áp dụng</button>
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+  <!-- EVENTS GRID -->
+  <section class="hs-events container">
+    <div class="hs-events-head">
+      <div class="hs-events-icon">📅</div>
+      <h2>Sự kiện chữa lành sắp tới</h2>
+    </div>
+    <div id="events-grid" class="hs-cards"></div>
+  </section>
+
+  <!-- PARTNER CTA -->
+  <section class="partner-cta container">
+    <div class="partner-cta__inner">
+      <div class="partner-cta__text">
+        <div class="partner-cta__title">Bạn là chủ không gian?</div>
+        <p>Trở thành Space Partner để tiếp cận cộng đồng và tổ chức sự kiện chữa lành.</p>
+      </div>
+      <a class="partner-cta__btn" href="/pages/partner-register.html">Đăng ký làm đối tác</a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <!-- Cột 1 -->
+      <div class="footer-col">
+        <div class="brand-footer">
+          <span class="logo">❤</span>
+          <div>
+            <div class="brand-text"><strong>Music</strong> <span class="space">Space</span></div>
+            <p class="tagline">Vietnam's Healing Music Map</p>
+          </div>
+        </div>
+        <p class="desc">
+          Nền tảng kết nối cảm xúc, không gian và cộng đồng thông qua giai điệu chữa lành.
+        </p>
+        <div class="social">
+          <a href="#"><i class="fab fa-facebook-f"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+          <a href="#"><i class="fab fa-messenger"></i></a>
+          <a href="#"><i class="fab fa-youtube"></i></a>
+        </div>
+      </div>
+
+      <!-- Cột 2 -->
+      <div class="footer-col">
+        <h4>Khám Phá</h4>
+        <ul>
+          <li><a href="#">I'm Healing</a></li>
+          <li><a href="#">Healing Space</a></li>
+          <li><a href="#">We Share</a></li>
+        </ul>
+      </div>
+
+      <!-- Cột 3 -->
+      <div class="footer-col">
+        <h4>Về chúng tôi</h4>
+        <ul>
+          <li><a href="#">Sứ mệnh</a></li>
+          <li><a href="#">We Read</a></li>
+        </ul>
+      </div>
+
+      <!-- Cột 4 -->
+      <div class="footer-col">
+        <h4>Đối Tác</h4>
+        <ul>
+          <li><a href="#">Trở thành đối tác</a></li>
+          <li><a href="#">Gói thành viên</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="copyright">
+      © 2025 Music Space. All rights reserved.
+    </div>
+  </footer>
+
+  <!-- AUTH MODAL (reuse) -->
+  <div id="auth-modal" class="auth-modal hidden">
+    <div class="auth-dialog">
+      <button class="auth-close" aria-label="close">×</button>
+      <div class="auth-tabs">
+        <button data-tab="login" class="auth-tab active">Đăng nhập</button>
+        <button data-tab="register" class="auth-tab">Đăng ký</button>
+      </div>
+      <form id="form-login" class="auth-pane show">
+        <label>Email</label>
+        <input type="email" name="email" required>
+        <label>Mật khẩu</label>
+        <input type="password" name="password" required>
+        <button type="submit" class="auth-btn">Đăng nhập</button>
+        <p id="login-msg" class="auth-msg"></p>
+      </form>
+      <form id="form-register" class="auth-pane">
+        <label>Họ tên</label>
+        <input type="text" name="fullName" required>
+        <label>Email</label>
+        <input type="email" name="email" required>
+        <label>Số điện thoại</label>
+        <input type="text" name="phone">
+        <label>Mật khẩu</label>
+        <input type="password" name="password" required>
+        <button type="submit" class="auth-btn">Tạo tài khoản</button>
+        <p id="register-msg" class="auth-msg"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Script chung (auth, map init, load markers, guard link…) -->
+  <script src="../js/script.js"></script>
+
+
+
+  <script>
+    // Toggle: ẩn/hiện map
+    const mapBtn = document.getElementById('view-map');
+    const listBtn = document.getElementById('view-list');
+    const mapEl = document.getElementById('map');
+    const eventsEl = document.querySelector('.hs-events'); // có thể null
+
+    if (mapBtn && listBtn && mapEl) {
+      function fixLeaflet() {
+        // chỉ invalidate khi map đang nhìn thấy
+        if (window.map && typeof window.map.invalidateSize === 'function' &&
+          mapEl.style.display !== 'none') {
+          setTimeout(() => window.map.invalidateSize(true), 50);
+        }
+      }
+
+      mapBtn.addEventListener('click', () => {
+        mapBtn.classList.add('active');
+        listBtn.classList.remove('active');
+
+        // hiện map, ẩn list (nếu có)
+        mapEl.style.display = 'block';
+        if (eventsEl) eventsEl.style.display = ''; // '' tốt hơn 'block' (theo CSS mặc định)
+
+        // cần delay 1 nhịp để layout ổn rồi mới invalidate
+        fixLeaflet();
+        // (tuỳ thích) cuộn lên khu vực map
+        // window.scrollTo({ top: mapEl.offsetTop - 60, behavior: 'smooth' });
+      });
+
+      listBtn.addEventListener('click', () => {
+        listBtn.classList.add('active');
+        mapBtn.classList.remove('active');
+
+        // ẩn map, hiện list (nếu có)
+        mapEl.style.display = 'none';
+        if (eventsEl) eventsEl.style.display = '';
+        // không cần invalidate khi đang ẩn
+        // (tuỳ thích) window.scrollTo({ top: eventsEl?.offsetTop ?? 0, behavior: 'smooth' });
+      });
+
+      // invalidate khi khởi tạo & khi resize/orientation
+      window.addEventListener('load', () => setTimeout(fixLeaflet, 60));
+      window.addEventListener('resize', () => setTimeout(fixLeaflet, 60));
+      window.addEventListener('orientationchange', () => setTimeout(fixLeaflet, 60));
+
+      // (khuyên dùng) invalidate khi map vào viewport
+      if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver((ents) => {
+          if (ents[0].isIntersecting) setTimeout(fixLeaflet, 50);
+        }, { threshold: 0.2 });
+        io.observe(mapEl);
+      }
+    }
+  </script>
+
+
+
+
+
+  <!-- Bổ sung riêng cho trang này -->
+  <script>
+    // 63 tỉnh/thành — fill vào #filter-city
+    const VN_PROVINCES = [
+      "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu", "Bắc Ninh", "Bến Tre", "Bình Dương", "Bình Định", "Bình Phước", "Bình Thuận", "Cà Mau",
+      "Cần Thơ", "Cao Bằng", "Đà Nẵng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang", "Hà Nam", "Hà Nội", "Hà Tĩnh",
+      "Hải Dương", "Hải Phòng", "Hậu Giang", "Hòa Bình", "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng", "Lạng Sơn", "Lào Cai",
+      "Long An", "Nam Định", "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị",
+      "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "TP. Hồ Chí Minh", "Trà Vinh", "Tuyên Quang",
+      "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
+    ];
+    (function fillProvinces() {
+      const sel = document.getElementById('filter-city');
+      if (!sel) return;
+      VN_PROVINCES.sort((a, b) => a.localeCompare(b, 'vi')).forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p; opt.textContent = p; sel.appendChild(opt);
+      });
+    })();
+
+    // Toggle: chỉ cuộn tới vùng tương ứng, KHÔNG ẩn map
+    const mapBtn = document.getElementById('view-map');
+    const listBtn = document.getElementById('view-list');
+    mapBtn?.addEventListener('click', () => {
+      mapBtn.classList.add('active');
+      listBtn.classList.remove('active');
+      window.scrollTo({ top: document.getElementById('map').offsetTop - 60, behavior: 'smooth' });
+    });
+    listBtn?.addEventListener('click', () => {
+      listBtn.classList.add('active');
+      mapBtn.classList.remove('active');
+      window.scrollTo({ top: document.querySelector('.hs-events').offsetTop - 60, behavior: 'smooth' });
+    });
+
+    // Render “Sự kiện sắp tới” (lấy cùng API /healing-events)
+    async function loadUpcoming() {
+      try {
+        const res = await fetch('/api/healing-events'); // không cần query rỗng
+        const data = await res.json();
+        const grid = document.getElementById('events-grid');
+        grid.innerHTML = '';
+
+        const list = Array.isArray(data) ? data : [];
+        if (!list.length) {
+          grid.innerHTML = `<p style="grid-column:1/-1;color:#64748b">Chưa có sự kiện.</p>`;
+          return;
+        }
+
+        list.slice(0, 9).forEach(ev => {
+          const title = ev.title || 'Sự kiện';
+          const city = ev.city || '';
+          const venue = ev.venue_name || '';
+          const slug = ev.slug;
+          const thumb = ev.thumbnail_url;     // ví dụ: /uploads/xxx.jpg
+          const start = ev.start_time ? new Date(ev.start_time).toLocaleString('vi-VN') : '';
+          const price = Number.isFinite(ev.price_cents)
+            ? (ev.price_cents / 100).toLocaleString('vi-VN') + ' ' + (ev.currency || 'VND')
+            : 'Miễn phí';
+
+          const card = document.createElement('article');
+          card.className = 'hs-card';
+          card.innerHTML = `
+          ${thumb ? `<img src="${thumb}" alt="${title}">` : ''}
+          <div class="p">
+            <h3>${title}</h3>
+            <div class="meta">
+              ${venue || city ? `<span>📍 ${[venue, city].filter(Boolean).join(', ')}</span>` : ''}
+              ${start ? `<span>🗓 ${start}</span>` : ''}
+              <span>💵 ${price}</span>
+            </div>
+            ${slug ? `<a class="arrow" href="/pages/event.html?slug=${encodeURIComponent(slug)}" style="display:inline-block;margin-top:8px;">Xem chi tiết →</a>` : ''}
+          </div>
+        `;
+          grid.appendChild(card);
+        });
+      } catch (e) {
+        console.warn('loadUpcoming error', e);
+        document.getElementById('events-grid').innerHTML =
+          `<p style="grid-column:1/-1;color:#ef4444">Không tải được danh sách sự kiện.</p>`;
+      }
+    }
+    document.addEventListener('DOMContentLoaded', loadUpcoming);
+  </script>
+</body>
+
+</html>

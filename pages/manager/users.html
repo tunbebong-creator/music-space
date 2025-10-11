@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quản lý người dùng – Music Space</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <style>
+    :root{--line:#e2e8f0;--muted:#64748b;--accent:#0ea5e9}
+    body{background:#f1f5f9}
+    .wrap{max-width:1080px;margin:24px auto;padding:0 16px}
+    .h1{font-size:24px;font-weight:800;margin:0 0 12px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .input{padding:10px;border:1px solid var(--line);border-radius:10px}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:#fff}
+    .table{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:auto}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px 12px;border-top:1px solid var(--line);white-space:nowrap}
+    th{background:#f8fafc;text-align:left}
+    select{padding:8px;border:1px solid var(--line);border-radius:10px}
+    .muted{color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="h1">Quản lý người dùng</div>
+    <div class="toolbar">
+      <input id="q" class="input" placeholder="Tìm theo email hoặc tên..." />
+      <button id="btn-search" class="btn">Tìm</button>
+      <a class="btn" href="/pages/manager/manager.html">← Về Dashboard</a>
+      <span class="muted" id="msg"></span>
+    </div>
+
+    <div class="table">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Email</th>
+            <th>Tên</th>
+            <th>Role</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+const API = '/api/manager';
+const u = JSON.parse(localStorage.getItem('ms_user') || 'null');
+if (!u || !['manager','admin'].includes((u.role||'').toLowerCase())) {
+  window.location.href = '/index.html#login';
+}
+const H = { 'x-user-id': u.id, 'x-user-role': u.role };
+const msg = document.getElementById('msg');
+
+async function loadUsers() {
+  const q = document.getElementById('q').value.trim();
+  const url = q ? `${API}/users?search=${encodeURIComponent(q)}` : `${API}/users`;
+  const res = await fetch(url, { headers: H });
+  const rows = await res.json();
+  const tb = document.getElementById('tb');
+  if (!rows?.length) { tb.innerHTML = `<tr><td colspan="6" class="muted">Không có dữ liệu</td></tr>`; return; }
+
+  tb.innerHTML = rows.map(x => `
+    <tr>
+      <td>${x.Id}</td>
+      <td>${x.Email || ''}</td>
+      <td>${x.FullName || ''}</td>
+      <td>
+        <select data-id="${x.Id}" class="role">
+          ${['customer','manager','admin'].map(r => `<option value="${r}" ${((x.Role||'').toLowerCase()===r)?'selected':''}>${r}</option>`).join('')}
+        </select>
+      </td>
+      <td>${x.CreatedAt ? new Date(x.CreatedAt).toLocaleString('vi-VN') : ''}</td>
+      <td><button class="btn small save" data-id="${x.Id}">Lưu</button></td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('btn-search').addEventListener('click', loadUsers);
+document.addEventListener('click', async (e) => {
+  if (e.target.classList.contains('save')) {
+    const id = e.target.dataset.id;
+    const sel = document.querySelector(`select.role[data-id="${id}"]`);
+    const role = sel.value;
+    msg.textContent = 'Đang lưu...';
+    try {
+      const res = await fetch(`${API}/users/${id}/role`, {
+        method:'PATCH',
+        headers: { ...H, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'update_failed');
+      msg.textContent = '✅ Đã cập nhật';
+      setTimeout(()=>msg.textContent='', 1200);
+    } catch(err) {
+      msg.textContent = '⚠ ' + err.message;
+    }
+  }
+});
+
+loadUsers();
+</script>
+</body>
+</html>

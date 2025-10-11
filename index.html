@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Music Space</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="nav-inner">
+      <!-- Logo -->
+      <a class="brand" href="#">
+        <span class="logo">❤</span>
+        <span><strong>Music</strong> <span class="space">Space</span></span>
+      </a>
+
+      <!-- Menu -->
+      <div class="nav-links">
+        <a href="#" class="chip">✨ I'm Healing</a>
+        <!-- Bắt buộc đăng nhập -->
+        <a href="pages/healing-space.html" class="chip" id="linkHealing" data-auth-required>🗺 Healing Space</a>
+        <a href="#" class="chip">👥 We Share</a>
+        <a href="#" class="chip">📖 We Read</a>
+      </div>
+
+      <!-- Actions -->
+      <div class="nav-actions">
+        <button class="icon-btn">🔈</button>
+        <div class="user-box">
+          <button class="icon-btn" id="btnUser">👤</button>
+          <div id="user-info"></div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero container" id="top">
+    <h1 class="headline">Giai điệu <span class="heal">chữa lành</span><br />Kết nối tâm hồn</h1>
+    <p class="sub">Biến cảm xúc thành âm nhạc. Khám phá không gian và sự kiện chữa lành trên khắp Việt Nam.</p>
+    <div class="cta-wrap">
+      <a class="btn" href="#features">Bắt đầu chữa lành →</a>
+    </div>
+  </header>
+
+  <!-- INTRO -->
+  <section class="intro container" id="intro">
+    <h2 class="intro-title">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3"></circle>
+        <circle cx="18" cy="16" r="3"></circle>
+      </svg>
+      Giới thiệu về Music Space
+    </h2>
+
+    <div class="intro-card">
+      <p>Music Space là nền tảng kết nối giữa con người, không gian và âm nhạc – nơi mỗi nốt nhạc trở thành
+        liệu pháp chữa lành, và mỗi địa điểm là một cánh cửa mở ra sự đồng cảm, sẻ chia.</p>
+      <p>Chúng tôi xây dựng bản đồ âm nhạc chữa lành đầu tiên tại Việt Nam, nơi bạn có thể:</p>
+
+      <ul class="intro-list">
+        <li>Khám phá các không gian âm nhạc cộng đồng tại khắp mọi miền tổ quốc.</li>
+        <li>Tạo và cá nhân hoá bản nhạc chữa lành riêng cho mình bằng công nghệ AI.</li>
+        <li>Ghi lại cảm xúc, lắng nghe chính mình, và kết nối với những người đồng cảm.</li>
+      </ul>
+
+      <p>Với sự kết hợp giữa âm nhạc, công nghệ và cộng đồng, Music Space không chỉ là một website – đó là
+        hành trình chữa lành, là ngôi nhà chung cho những tâm hồn đang tìm về sự an yên.</p>
+
+      <p class="intro-callout">🌿 <strong>Hãy để âm nhạc dẫn lối bạn trở về với chính mình.</strong></p>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features container" id="features">
+    <h2 class="headline">Trải nghiệm Music Space</h2>
+    <p class="sub">Ba hành trình chính giúp bạn kết nối sâu hơn với âm nhạc, cảm xúc và cộng đồng.</p>
+
+    <div class="cards">
+      <article class="card">
+        <div class="badge blue">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="2">
+            <path d="M5 12l3-3 3 3-3 3-3-3zm9-7l2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4z" />
+          </svg>
+        </div>
+        <h3>Chữa lành cá nhân</h3>
+        <p>Tạo playlist từ cảm xúc của bạn với AI và ghi lại hành trình tâm trạng mỗi ngày.</p>
+        <a class="arrow" href="#">Khám phá ngay →</a>
+      </article>
+
+      <article class="card">
+        <div class="badge yellow">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="white" stroke-width="2">
+            <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
+          </svg>
+        </div>
+        <h3>Không gian & Sự kiện</h3>
+        <p>Khám phá bản đồ các địa điểm và tham gia những sự kiện âm nhạc chữa lành gần bạn.</p>
+        <a class="arrow" href="#">Khám phá ngay →</a>
+      </article>
+
+      <article class="card">
+        <div class="badge pink">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="white" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M22 21v-2a4 4 0 00-3-3.87" />
+            <path d="M16 3.13a4 4 0 010 7.75" />
+          </svg>
+        </div>
+        <h3>Cộng đồng We Share</h3>
+        <p>Chia sẻ câu chuyện, tìm kiếm sự đồng cảm và kết nối với những người cùng tần số.</p>
+        <a class="arrow" href="#">Khám phá ngay →</a>
+      </article>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <div class="brand-footer">
+          <span class="logo">❤</span>
+          <div>
+            <div class="brand-text"><strong>Music</strong> <span class="space">Space</span></div>
+            <p class="tagline">Vietnam's Healing Music Map</p>
+          </div>
+        </div>
+        <p class="desc">Nền tảng kết nối cảm xúc, không gian và cộng đồng thông qua giai điệu chữa lành.</p>
+        <div class="social">
+          <a href="#"><i class="fab fa-facebook-f"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+          <a href="#"><i class="fab fa-messenger"></i></a>
+          <a href="#"><i class="fab fa-youtube"></i></a>
+        </div>
+      </div>
+
+      <div class="footer-col">
+        <h4>Khám Phá</h4>
+        <ul>
+          <li><a href="#">I'm Healing</a></li>
+          <li><a href="#">Healing Space</a></li>
+          <li><a href="#">We Share</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Về chúng tôi</h4>
+        <ul>
+          <li><a href="#">Sứ mệnh</a></li>
+          <li><a href="#">We Read</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Đối Tác</h4>
+        <ul>
+          <li><a href="#">Trở thành đối tác</a></li>
+          <li><a href="#">Gói thành viên</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="copyright">© 2025 Music Space. All rights reserved.</div>
+  </footer>
+
+  <!-- AUTH MODAL -->
+  <div id="auth-modal" class="auth-modal hidden">
+    <div class="auth-dialog">
+      <button class="auth-close" aria-label="close">×</button>
+
+      <div class="auth-tabs">
+        <button data-tab="login" class="auth-tab active">Đăng nhập</button>
+        <button data-tab="register" class="auth-tab">Đăng ký</button>
+      </div>
+
+      <!-- LOGIN -->
+      <form id="form-login" class="auth-pane show">
+        <label>Email</label>
+        <input type="email" name="email" required placeholder="you@email.com">
+        <label>Mật khẩu</label>
+        <input type="password" name="password" required placeholder="••••••••">
+
+        <div class="row-right" style="margin:6px 0 10px">
+          <button type="button" class="link" id="btnForgot">Quên mật khẩu?</button>
+        </div>
+
+        <button type="submit" class="auth-btn">Đăng nhập</button>
+        <p class="auth-msg" id="login-msg"></p>
+      </form>
+
+      <!-- REGISTER -->
+      <form id="form-register" class="auth-pane">
+        <label>Họ tên</label>
+        <input type="text" name="fullName" required placeholder="Nguyễn Văn A">
+        <label>Email</label>
+        <input type="email" name="email" required placeholder="you@email.com">
+        <label>Số điện thoại</label>
+        <input type="text" name="phone" placeholder="0912 345 678">
+        <label>Mật khẩu</label>
+        <input type="password" name="password" required placeholder="••••••••">
+        <button type="submit" class="auth-btn">Tạo tài khoản</button>
+        <p class="auth-msg" id="register-msg"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- (tuỳ chọn) bỏ dòng dưới nếu bạn không dùng file js cũ -->
+  <!-- <script src="js/script.js"></script> -->
+
+  <script>
+    const $$ = (s, el = document) => el.querySelector(s);
+    const API = '/api';
+    const modal = $$('#auth-modal');
+    const btnUser = $$('#btnUser');
+    const btnClose = $$('.auth-close');
+    const tabBtns = document.querySelectorAll('.auth-tab');
+    const panes = document.querySelectorAll('.auth-pane');
+    const loginMsg = $$('#login-msg');
+    const registerMsg = $$('#register-msg');
+
+    function openModal(tab = 'login') { modal.classList.remove('hidden'); switchTab(tab); }
+    function closeModal() { modal.classList.add('hidden'); loginMsg.textContent = ''; registerMsg.textContent = ''; }
+    function switchTab(tab) {
+      tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      panes.forEach(p => p.classList.toggle('show', p.id === 'form-' + tab));
+    }
+
+    btnUser?.addEventListener('click', () => openModal('login'));
+    btnClose?.addEventListener('click', closeModal);
+    tabBtns.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    // chặn link cần đăng nhập
+    document.querySelectorAll('[data-auth-required]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        const u = localStorage.getItem('ms_user');
+        if (!u) { e.preventDefault(); openModal('login'); }
+      });
+    });
+
+    // ===== User chip =====
+    function renderUser() {
+      const box = document.querySelector('#user-info');
+      if (!box) return;
+
+      let u = null;
+      try { u = JSON.parse(localStorage.getItem('ms_user') || 'null'); } catch { }
+
+      if (!u) { box.innerHTML = ''; return; }
+
+      const name = (u.fullName && u.fullName.trim())
+        ? u.fullName.trim()
+        : (u.email || '').split('@')[0];
+
+      const isManager = ['manager', 'admin'].includes((u.role || '').toLowerCase());
+
+      box.innerHTML = `
+    <div class="user-mini">
+      <div class="user-name">${name}</div>
+      ${isManager ? `<a href="/pages/manager/manager.html" class="btn-mini">Quản trị</a>` : ''}
+      <button id="btnLogout" class="logout-link">Đăng xuất</button>
+    </div>
+  `;
+
+      document.querySelector('#btnLogout')?.addEventListener('click', () => {
+        localStorage.removeItem('ms_user');
+        renderUser();
+      });
+    }
+
+
+    // Gọi khi trang load
+    document.addEventListener('DOMContentLoaded', renderUser);
+
+    // ===== LOGIN (cập nhật lại) =====
+    document.querySelector('#form-login')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const loginMsg = document.querySelector('#login-msg');
+      loginMsg.textContent = 'Đang đăng nhập...';
+      const fd = new FormData(e.target);
+      const payload = { email: fd.get('email'), password: fd.get('password') };
+
+      try {
+        const r = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (!r.ok) {
+          loginMsg.textContent =
+            d.error === 'user_not_found' ? 'Email không tồn tại' :
+              d.error === 'wrong_password' ? 'Sai mật khẩu' :
+                'Đăng nhập thất bại';
+          return;
+        }
+
+        // Lưu người dùng
+        localStorage.setItem('ms_user', JSON.stringify(d));
+        renderUser();
+
+        // Nếu là manager/admin -> chuyển sang trang quản trị
+        if (['manager', 'admin'].includes((d.role || '').toLowerCase())) {
+          window.location.href = '/pages/manager/manager.html';
+          return;
+        }
+
+        // Ngược lại, đóng modal
+        loginMsg.textContent = '✅ Đăng nhập thành công';
+        setTimeout(() => document.querySelector('#auth-modal')?.classList.add('hidden'), 600);
+      } catch (err) {
+        loginMsg.textContent = 'Lỗi mạng, thử lại.';
+      }
+    });
+
+    // REGISTER
+    $$('#form-register')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      registerMsg.textContent = 'Đang tạo tài khoản...';
+      const fd = new FormData(e.target);
+      const payload = {
+        fullName: fd.get('fullName'),
+        email: fd.get('email'),
+        phone: fd.get('phone'),
+        password: fd.get('password'),
+      };
+      try {
+        const r = await fetch(API + '/auth/register', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (!r.ok) {
+          registerMsg.textContent =
+            d.error === 'email_exists' ? 'Email đã tồn tại' :
+              d.detail || 'Tạo tài khoản thất bại';
+          return;
+        }
+        registerMsg.textContent = '✅ Tạo tài khoản thành công. Hãy đăng nhập.';
+        switchTab('login');
+      } catch (err) {
+        registerMsg.textContent = 'Lỗi mạng, thử lại.';
+      }
+    });
+
+    // FORGOT
+    $$('#btnForgot')?.addEventListener('click', async () => {
+      const email = ($$('#form-login input[name="email"]')?.value || '').trim();
+      const input = email || prompt('Nhập email để đặt lại mật khẩu:');
+      if (!input) return;
+      try {
+        await fetch(API + '/auth/forgot', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: input })
+        });
+        alert('Nếu email tồn tại, liên kết đặt lại mật khẩu đã được gửi.');
+      } catch {
+        alert('Không gửi được yêu cầu. Thử lại sau.');
+      }
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Quản lý không gian • Music Space</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="/assets/manager-events.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/assets/style.css" />
+  <style>
+    body {
+      font-family: "Inter", sans-serif;
+      margin: 0;
+      background: #f9fafb;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 16px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f3f4f6;
+      font-weight: 700;
+      color: #374151;
+    }
+
+    tr:hover {
+      background: #f9fafb;
+    }
+
+    .status {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .approved {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .rejected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .muted {
+      color: #6b7280;
+      font-size: 13px;
+    }
+
+    .desc {
+      max-width: 280px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
+      color: #374151;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <a class="back" href="/pages/manager/manager.html">← Quay lại</a>
+    <h1>Danh sách</h1>
+  </div>
+  <main class="wrap">
+    <h1>Danh sách Space Partner</h1>
+    <table id="spaces-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Tên không gian</th>
+          <th>Loại</th>
+          <th>Địa chỉ</th>
+          <th>Thành phố</th>
+          <th>Khu vực</th>
+          <th>Mô tả ngắn</th>
+          <th>Email</th>
+          <th>SĐT</th>
+          <th>Trạng thái</th>
+          <th>Ngày tạo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="11" class="muted">Đang tải...</td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script>
+    (async function loadSpaces() {
+      const tbody = document.querySelector('#spaces-tbody');  // <tbody id="spaces-tbody">
+      if (!tbody) return;
+
+      try {
+        const res = await fetch((window.API_BASE || '/api') + '/manager/spaces');
+        const payload = await res.json();
+
+        // Chuẩn hoá dữ liệu trả về: có thể server trả mảng trực tiếp hoặc { rows: [...] }
+        const rows = Array.isArray(payload) ? payload : (payload?.rows || []);
+
+        if (!rows.length) {
+          tbody.innerHTML = `
+        <tr><td colspan="11" style="color:#64748b">Chưa có đăng ký nào.</td></tr>
+      `;
+          return;
+        }
+
+        const fmtTime = t => t ? new Date(t).toLocaleString('vi-VN') : '';
+
+        tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.id ?? ''}</td>
+        <td>${r.space_name ?? ''}</td>
+        <td>${r.space_type ?? ''}</td>
+        <td>${r.address_line ?? ''}</td>
+        <td>${r.city ?? ''}</td>
+        <td>${r.region ?? ''}</td>
+        <td>${r.space_desc ?? ''}</td>
+        <td>${r.contact_email ?? ''}</td>
+        <td>${r.contact_phone ?? ''}</td>
+        <td>${r.status ?? ''}</td>
+        <td>${fmtTime(r.created_at)}</td>
+      </tr>
+    `).join('');
+      } catch (err) {
+        console.error('loadSpaces error:', err);
+        tbody.innerHTML = `
+      <tr><td colspan="11" style="color:#ef4444">Không tải được dữ liệu.</td></tr>
+    `;
+      }
+    })();
+  </script>
+
+</body>
+
+</html>

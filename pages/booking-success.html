@@ -1,0 +1,68 @@
+  <!doctype html>
+  <html lang="vi">
+  <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Giữ chỗ thành công • Music Space</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <style>
+    body { background:#f6f9fb }
+    .wrap { max-width:760px; margin:32px auto; padding:0 16px }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 18px 50px rgba(15,23,42,.06); overflow:hidden }
+    .banner { width:100%; height:220px; object-fit:cover; background:#f3f4f6 }
+    .inner { padding:18px }
+    .title { font-size:28px; font-weight:800; margin:8px 0 2px }
+    .meta  { color:#64748b; margin-bottom:14px }
+    .ticket {
+      border:1px dashed #cbd5e1; border-radius:14px; padding:14px 16px; background:#fafafa;
+      display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:center
+    }
+    .code { font-size:22px; font-weight:900 }
+    .btn { display:inline-block; padding:12px 16px; border-radius:12px; background:#111827; color:#fff; font-weight:700; text-decoration:none }
+  </style>
+  </head>
+  <body>
+  <main class="wrap">
+    <div class="card">
+      <img id="ban" class="banner" alt="">
+      <div class="inner">
+        <div class="title" id="t">—</div>
+        <div class="meta" id="time">—</div>
+
+        <div class="ticket">
+          <div>
+            <div>Mã vé</div>
+            <div class="code" id="code">—</div>
+          </div>
+          <div>
+            <div>Thông tin</div>
+            <div id="info">—</div>
+          </div>
+        </div>
+
+        <p style="margin-top:14px;color:#64748b">
+          Vé đã được gửi tới email của bạn (kiểm tra cả hộp thư rác nếu chưa thấy).
+        </p>
+
+        <a class="btn" href="/index.html" style="margin-top:8px;display:inline-block">Về trang chủ</a>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const code = qs.get('code') || '';
+    (async () => {
+      const r = await fetch('/api/bookings/by-code/' + encodeURIComponent(code));
+      const b = await r.json();
+      if(!r.ok) { alert('Không tìm thấy vé'); return; }
+      document.getElementById('ban').src = b.BannerUrl || b.ThumbnailUrl || '/assets/placeholder.jpg';
+      document.getElementById('t').textContent = b.EventTitle || 'Sự kiện';
+      document.getElementById('time').textContent = b.StartTime ? new Date(b.StartTime).toLocaleString('vi-VN') : '';
+      document.getElementById('code').textContent = b.Code;
+      document.getElementById('info').textContent =
+        (b.CustomerName||'') + ' • ' + (b.CustomerEmail||'') + (b.CustomerPhone?(' • '+b.CustomerPhone):'');
+    })();
+  </script>
+  </body>
+  </html>

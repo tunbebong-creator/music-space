@@ -1,0 +1,33 @@
+/* Modal layout */
+.ms-modal.hidden { display: none; }
+.ms-modal { position: fixed; inset: 0; z-index: 60; }
+.ms-modal__backdrop { position:absolute; inset:0; background:rgba(2,6,23,.45); }
+.ms-modal__dialog {
+  position:relative; z-index:1; width:min(560px, 92vw);
+  margin: 8vh auto; background:#fff; border-radius:16px;
+  border:1px solid #e2e8f0; box-shadow:0 30px 70px rgba(2,8,23,.25);
+}
+.ms-modal__header { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid #e2e8f0; }
+.ms-modal__close { border:0;background:transparent;font-size:20px; cursor:pointer; }
+.ms-modal__body { padding:16px; display:grid; gap:14px; }
+
+/* Pay options */
+.pay-options { display:grid; gap:10px; }
+.pay-option {
+  display:flex; gap:12px; align-items:center; width:100%;
+  padding:10px 12px; border-radius:12px; border:1px solid #e2e8f0; background:#f8fafc; cursor:pointer;
+}
+.pay-option .emoji { font-size:20px; }
+.pay-option .t { font-weight:700; }
+.pay-option .d { font-size:12px; color:#64748b; }
+.pay-option.disabled { opacity:.6; cursor:not-allowed; }
+
+/* Cash form */
+.cash-form.hidden { display:none; }
+.cash-form .f-row { display:grid; gap:6px; margin-top:8px; }
+.cash-form input { padding:10px; border:1px solid #e2e8f0; border-radius:10px; }
+.actions { margin-top:12px; display:flex; gap:10px; justify-content:flex-end; }
+.btn { padding:8px 12px; border-radius:10px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; }
+.btn.primary { background:#0ea5e9; border-color:#0ea5e9; color:#fff; }
+.btn.ghost { background:#fff; }
+.msg { margin-top:8px; font-size:14px; color:#065f46; }

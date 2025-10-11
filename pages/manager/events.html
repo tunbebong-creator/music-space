@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sự kiện của tôi – Manager</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="/assets/manager-events.css" /> <!-- CSS riêng -->
+</head>
+<body>
+  <main class="page">
+    <div class="topbar">
+      <a class="back" href="/pages/manager/manager.html">← Quay lại</a>
+      <h1>Sự kiện của tôi</h1>
+    </div>
+
+    <div class="toolbar">
+      <a class="btn primary" href="/pages/manager/event-new.html">+ Tạo sự kiện</a>
+      <span id="total" class="muted">Tổng: 0</span>
+      <div class="filters">
+        <input id="q" placeholder="Tìm tiêu đề / địa điểm…" />
+        <select id="f-status" title="Lọc trạng thái">
+          <option value="">Tất cả trạng thái</option>
+          <option value="up">Sắp tới</option>
+          <option value="live">Đang diễn ra</option>
+          <option value="past">Đã diễn ra</option>
+        </select>
+        <button id="btn-clear" class="btn ghost">Xoá lọc</button>
+      </div>
+    </div>
+
+    <div class="table">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:76px">Ảnh</th>
+            <th>Tiêu đề</th>
+            <th>Thời gian</th>
+            <th>Trạng thái</th>
+            <th>Địa điểm</th>
+            <th>Giá</th>
+            <th style="width:140px"></th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td colspan="7" class="muted">Đang tải...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    // ------ Guard quyền ------
+    const u = JSON.parse(localStorage.getItem('ms_user')||'null');
+    if(!u || !['manager','admin'].includes((u.role||'').toLowerCase())){
+      window.location.href = '/index.html#login';
+    }
+    const H = {'x-user-id': u.id, 'x-user-role': u.role};
+
+    // ------ Utils ------
+    const $ = sel => document.querySelector(sel);
+
+    function fmtTime(t){
+      if(!t) return '';
+      const d = new Date(t);
+      const hhmm = d.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+      const ddmmyy = d.toLocaleDateString('vi-VN');
+      return `${hhmm} ${ddmmyy}`;
+    }
+    function statusOf(st, et){
+      const now = Date.now();
+      const s = st ? new Date(st).getTime() : null;
+      const e = et ? new Date(et).getTime() : null;
+      if (s && e && now >= s && now <= e) return {k:'live', text:'Đang diễn ra'};
+      if (s && now < s) return {k:'up', text:'Sắp tới'};
+      return {k:'past', text:'Đã diễn ra'};
+    }
+    function money(priceCents, cur){
+      if(priceCents==null) return '';
+      const v = Math.round(Number(priceCents)/100);
+      return v.toLocaleString('vi-VN') + ' ' + (cur||'VND');
+    }
+
+    let ALL = []; // cache toàn bộ sự kiện
+
+    // ------ Render ------
+    function render(list){
+      const tb = $('#rows');
+      $('#total').textContent = 'Tổng: ' + (list?.length || 0);
+
+      if(!list || !list.length){
+        tb.innerHTML = `<tr><td colspan="7" class="muted">Chưa có sự kiện.</td></tr>`;
+        return;
+      }
+
+      tb.innerHTML = list.map(ev=>{
+        const st = statusOf(ev.StartTime, ev.EndTime);
+        const time = `${fmtTime(ev.StartTime)}${ev.EndTime?` – ${fmtTime(ev.EndTime)}`:''}`;
+        return `
+          <tr>
+            <td>${ev.ThumbnailUrl ? `<img class="cover" src="${ev.ThumbnailUrl}" alt="">` : ''}</td>
+            <td class="title" title="${ev.Title||''}">${ev.Title || ''}</td>
+            <td>${time}</td>
+            <td><span class="badge ${st.k}">${st.text}</span></td>
+            <td class="place" title="${ev.VenueName || ev.City || ''}">${ev.VenueName || ev.City || ''}</td>
+            <td>${money(ev.PriceCents, ev.Currency)}</td>
+            <td class="actions">
+              ${ev.Slug ? `<a class="btn" href="/pages/event.html?slug=${ev.Slug}">Xem</a>`:''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ------ Lọc & tìm kiếm ------
+    function applyFilters(){
+      const q = ($('#q').value || '').toLowerCase().trim();
+      const fs = $('#f-status').value; // '', 'up', 'live', 'past'
+      const filtered = ALL.filter(ev=>{
+        const st = statusOf(ev.StartTime, ev.EndTime).k;
+        const text = `${ev.Title||''} ${ev.VenueName||''} ${ev.City||''}`.toLowerCase();
+        const okQ = q ? text.includes(q) : true;
+        const okS = fs ? (st === fs) : true;
+        return okQ && okS;
+      });
+      render(filtered);
+    }
+
+    $('#q').addEventListener('input', applyFilters);
+    $('#f-status').addEventListener('change', applyFilters);
+    $('#btn-clear').addEventListener('click', ()=>{
+      $('#q').value = '';
+      $('#f-status').value = '';
+      render(ALL);
+    });
+
+    // ------ Load ------
+    (async function load(){
+      try{
+        const res = await fetch('/api/manager/events', {headers:H});
+        ALL = await res.json();
+        ALL = (ALL||[]).sort((a,b)=>{
+          const ka = new Date(a.EndTime || a.StartTime || 0).getTime();
+          const kb = new Date(b.EndTime || b.StartTime || 0).getTime();
+          return kb - ka;
+        });
+        render(ALL);
+      }catch(e){
+        $('#rows').innerHTML = `<tr><td colspan="7" class="muted">Không tải được dữ liệu.</td></tr>`;
+      }
+    })();
+  </script>
+</body>
+</html>

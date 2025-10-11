@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Đặt vé – Music Space</title>
+  <link rel="stylesheet" href="/assets/style.css"/>
+  <style>
+    :root{--line:#e2e8f0;--muted:#64748b;--accent:#0ea5e9}
+    body{background:#f8fafc}
+    .page{max-width:900px;margin:24px auto;padding:0 16px}
+    .box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:880px){.grid{grid-template-columns:1fr}}
+    label{font-weight:700}
+    input,textarea,select{padding:10px;border:1px solid var(--line);border-radius:10px;width:100%}
+    .muted{color:var(--muted)}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:#fff;text-decoration:none;cursor:pointer}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .ticket{margin-top:16px;display:grid;gap:12px;border:1px dashed #cbd5e1;border-radius:16px;padding:16px}
+    .row{display:grid;gap:6px}
+    .ok{color:#16a34a;font-weight:800}
+  </style>
+</head>
+<body>
+  <!-- header tái dùng từ style.css -->
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a class="brand" href="/index.html"><span class="logo">❤</span><span><strong>Music</strong> <span class="space">Space</span></span></a>
+      <div class="nav-links">
+        <a class="chip" href="/pages/healing-space.html">🗺 Healing Space</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page">
+    <a class="btn" href="javascript:history.back()">← Quay lại</a>
+
+    <section class="box">
+      <h2 style="margin:6px 0 12px">Đặt vé tiền mặt</h2>
+      <p class="muted" id="ev-brief">Đang tải thông tin sự kiện...</p>
+
+      <form id="book-form" class="grid">
+        <div>
+          <label>Họ tên *</label>
+          <input name="name" required/>
+        </div>
+        <div>
+          <label>Email</label>
+          <input type="email" name="email"/>
+        </div>
+        <div>
+          <label>Số điện thoại</label>
+          <input name="phone"/>
+        </div>
+        <div>
+          <label>Số lượng</label>
+          <input type="number" name="quantity" min="1" value="1"/>
+        </div>
+        <div class="row" style="grid-column:1/-1">
+          <label>Ghi chú</label>
+          <textarea name="note" rows="3" placeholder="Thông tin thêm (nếu có)"></textarea>
+        </div>
+
+        <div style="grid-column:1/-1;display:flex;gap:10px;align-items:center">
+          <button class="btn primary" type="submit">Xác nhận đặt vé</button>
+          <span id="msg" class="muted"></span>
+        </div>
+      </form>
+
+      <!-- Vé hiển thị sau khi đặt thành công -->
+      <div id="ticket" class="ticket" style="display:none">
+        <div class="ok">✔ Đặt vé thành công!</div>
+        <div><strong>Vé:</strong> <span id="t-code"></span></div>
+        <div><strong>Sự kiện:</strong> <span id="t-title"></span></div>
+        <div><strong>Thời gian:</strong> <span id="t-time"></span></div>
+        <div><strong>Địa điểm:</strong> <span id="t-venue"></span></div>
+        <div><strong>Số lượng:</strong> <span id="t-qty"></span></div>
+        <div><strong>Số tiền:</strong> <span id="t-amount"></span></div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <a class="btn" href="javascript:window.print()">In/Save vé</a>
+          <a class="btn" href="/pages/manager/manager.html">Về trang quản lý</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="brand-footer">
+        <span class="logo">❤</span>
+        <div>
+          <div class="brand-text"><strong>Music</strong> <span class="space">Space</span></div>
+          <p class="tagline">Vietnam's Healing Music Map</p>
+        </div>
+      </div>
+    </div>
+    <div class="copyright">© 2025 Music Space. All rights reserved.</div>
+  </footer>
+
+<script>
+const params = new URL(location.href).searchParams;
+const slug   = params.get('slug');
+const method = params.get('method') || 'cash';
+const H = {}; // (không bắt buộc login để đặt tiền mặt)
+
+if(!slug){ alert('Thiếu slug sự kiện'); location.href='/'; }
+
+// load tóm tắt sự kiện
+(async ()=>{
+  try{
+    const r = await fetch(`/api/events/${encodeURIComponent(slug)}`);
+    if(!r.ok) throw new Error('not_found');
+    const ev = await r.json();
+    window.__ev = ev;
+    const dt = (t)=> t ? new Date(t).toLocaleString('vi-VN') : '';
+    document.getElementById('ev-brief').innerHTML =
+      `<strong>${ev.Title}</strong> – ${dt(ev.StartTime)}<br/>`+
+      `${ev.VenueName||ev.VenueAddress||ev.City||''}`;
+  }catch(e){
+    document.getElementById('ev-brief').textContent = 'Không tải được thông tin sự kiện.';
+  }
+})();
+
+// submit đặt vé
+document.getElementById('book-form').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Đang xử lý...';
+
+  try{
+    const fd = new FormData(e.target);
+    const payload = {
+      method, slug,
+      name: fd.get('name'),
+      email: fd.get('email'),
+      phone: fd.get('phone'),
+      quantity: Number(fd.get('quantity')||1),
+      note: fd.get('note')||''
+    };
+
+    const res = await fetch('/api/bookings', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', ...H},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || data.detail || 'Đặt vé thất bại');
+
+    msg.textContent = '';
+    renderTicket(data);
+    e.target.reset();
+  }catch(err){
+    msg.textContent = '⚠ '+ err.message;
+  }
+});
+
+function money(cents, cur='VND'){
+  const v = Math.round(Number(cents||0)/100);
+  return v.toLocaleString('vi-VN') + ' ' + cur;
+}
+
+function renderTicket(t){
+  const ev = window.__ev || {};
+  const dt = (x)=> x? new Date(x).toLocaleString('vi-VN') : '';
+  document.getElementById('ticket').style.display='grid';
+  document.getElementById('t-code').textContent   = t.code;
+  document.getElementById('t-title').textContent  = ev.Title||'';
+  document.getElementById('t-time').textContent   = dt(ev.StartTime);
+  document.getElementById('t-venue').textContent  = ev.VenueName || ev.VenueAddress || ev.City || '';
+  document.getElementById('t-qty').textContent    = t.quantity;
+  document.getElementById('t-amount').textContent = money(t.amountCents, ev.Currency||'VND');
+}
+</script>
+</body>
+</html>
