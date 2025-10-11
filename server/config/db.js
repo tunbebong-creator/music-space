@@ -1,25 +1,32 @@
+// server/config/db.js
 const { Pool } = require('pg');
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('Missing DATABASE_URL');
-}
+// DATABASE_URL trên Render (Neon) dạng: postgres://user:pass@host/db?sslmode=require
+const connectionString = process.env.DATABASE_URL;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { require: true, rejectUnauthorized: false },
+  connectionString,
+  ssl: connectionString && !/sslmode=disable/.test(connectionString) ? { rejectUnauthorized: false } : undefined,
 });
 
-// warm-up & log lỗi rõ ràng
-(async () => {
-  try {
-    await pool.query('select 1');
-    console.log('✅ DB connected (Neon)');
-  } catch (e) {
-    console.error('❌ DB warm-up failed:', e.code, e.message);
-  }
-})();
+// helper query (dùng cho các route không cần transaction)
+async function query(text, params = []) {
+  const res = await pool.query(text, params);
+  return res;
+}
 
-module.exports = {
-  pool,
-  query: (text, params = []) => pool.query(text, params)
-};
+// helper tagged template -> thay thế $1, $2…
+function sqlx(strings, ...values) {
+  let text = '';
+  const vals = [];
+  strings.forEach((s, i) => {
+    text += s;
+    if (i < values.length) {
+      vals.push(values[i]);
+      text += `$${vals.length}`;
+    }
+  });
+  return { text, values: vals };
+}
+
+module.exports = { pool, query, sqlx };
