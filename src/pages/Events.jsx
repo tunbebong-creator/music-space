@@ -464,6 +464,8 @@ export default function Events() {
         onSuccess={(user) => {
           setUser(user);
           setShowModernAuthModal(false);
+          // Redirect to homepage after login
+          navigate('/');
         }}
       />
     </div>
