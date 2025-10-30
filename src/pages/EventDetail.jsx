@@ -114,7 +114,12 @@ export default function EventDetail() {
 
   // Handle booking
   const handleBooking = async () => {
-    if (isBooking) return; // Prevent double submission
+    if (isBooking) {
+      console.log('⚠️ Already booking, ignoring duplicate request');
+      return; // Prevent double submission
+    }
+    
+    console.log('🚀 handleBooking called');
     
     try {
       if (!event) {
@@ -128,12 +133,26 @@ export default function EventDetail() {
         return;
       }
 
+      console.log('✅ Validation passed, setting isBooking to true');
       setIsBooking(true);
 
-      // Check if user is logged in (optional for booking)
+      // Check if user is logged in (optional for booking) - with timeout
       const token = localStorage.getItem('auth_token');
-      const me = token ? await customAPI.auth.me().catch(() => null) : null;
-      console.log('🔍 User info:', me);
+      let me = null;
+      if (token) {
+        try {
+          console.log('🔍 Checking user auth...');
+          const authPromise = customAPI.auth.me();
+          const authTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Auth timeout')), 5000)
+          );
+          me = await Promise.race([authPromise, authTimeout]).catch(() => null);
+          console.log('🔍 User info:', me);
+        } catch (authError) {
+          console.warn('⚠️ Auth check failed (non-critical):', authError);
+          // Continue anyway - booking doesn't require auth
+        }
+      }
       
       const payload = {
         event_id: event.id,
@@ -153,12 +172,18 @@ export default function EventDetail() {
       console.log('🔍 Booking payload:', payload);
 
       // Make booking request with AbortController for proper timeout handling
+      const apiBase = API_BASE_URL.replace('/api', '');
+      const url = `${apiBase}/api/bookings`;
+      console.log('🌐 Making request to:', url);
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      const timeoutId = setTimeout(() => {
+        console.error('⏱️ Request timeout after 60 seconds');
+        controller.abort();
+      }, 60000); // 60 second timeout
       
       try {
-        const apiBase = API_BASE_URL.replace('/api', '');
-        const response = await fetch(`${apiBase}/api/bookings`, {
+        const response = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -169,9 +194,11 @@ export default function EventDetail() {
         });
 
         clearTimeout(timeoutId);
+        console.log('📡 Response received:', response.status, response.statusText);
 
         if (!response.ok) {
           const errorText = await response.text();
+          console.error('❌ Response error:', errorText);
           let errorData;
           try {
             errorData = JSON.parse(errorText);
@@ -222,6 +249,7 @@ export default function EventDetail() {
 
       } catch (fetchError) {
         clearTimeout(timeoutId);
+        console.error('❌ Fetch error:', fetchError);
         if (fetchError.name === 'AbortError') {
           throw new Error('Request timeout. Vui lòng thử lại.');
         }
@@ -577,9 +605,10 @@ export default function EventDetail() {
               </div>
 
               {/* Booking Form */}
-              <form onSubmit={(e) => {
+              <form onSubmit={async (e) => {
                 e.preventDefault();
-                handleBooking();
+                console.log('📝 Form submitted');
+                await handleBooking();
               }} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
