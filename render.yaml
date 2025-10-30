@@ -1,4 +1,5 @@
 services:
+  # Backend API
   - type: web
     name: music-space-api
     env: node
@@ -22,5 +23,16 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
+
+  # Frontend Static Site
+  - type: web
+    name: music-space-frontend
+    env: static
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://usic-space-server.onrender.com/api
+
 
 
