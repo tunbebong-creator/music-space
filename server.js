@@ -1932,30 +1932,30 @@ app.post('/api/bookings', async (req, res) => {
     console.log('✅ Response sent successfully');
 
     // Send confirmation email AFTER response is sent (non-blocking)
-    if (customer_email) {
+      if (customer_email) {
       console.log('📧 Scheduling email to be sent...');
       // Use setImmediate to ensure email doesn't block
       setImmediate(async () => {
         try {
           console.log('📧 Email sending started for:', customer_email);
-          const siteName = process.env.SITE_NAME || 'Music Space';
-          const payText = payment_method ? `Phương thức thanh toán: ${payment_method}` : 'Phương thức thanh toán: Thanh toán tại sự kiện';
-          const subject = `Xác nhận đặt vé #${booking.id}`;
-          const body = `
-            <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
-              <h2 style="color:#1E88E5; margin:0 0 12px;">${siteName} - Xác nhận đặt vé</h2>
-              <p>Xin chào <strong>${customer_name || ''}</strong>,</p>
-              <p>Bạn đã đặt vé thành công. Mã đặt vé: <strong>#${booking.id}</strong></p>
-              <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
-                <p><strong>Ngày:</strong> ${new Date(booking.booking_date).toLocaleString('vi-VN')}</p>
-                <p><strong>Giờ:</strong> ${booking.start_time} - ${booking.end_time}</p>
-                <p><strong>Tổng tiền:</strong> ${booking.total_price || '0'}</p>
-                <p>${payText}</p>
-              </div>
-              <p>Nếu có bất kỳ thắc mắc nào, vui lòng phản hồi email này.</p>
-              <p style="color:#666;">Trân trọng,<br/>${siteName}</p>
+        const siteName = process.env.SITE_NAME || 'Music Space';
+        const payText = payment_method ? `Phương thức thanh toán: ${payment_method}` : 'Phương thức thanh toán: Thanh toán tại sự kiện';
+        const subject = `Xác nhận đặt vé #${booking.id}`;
+        const body = `
+          <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
+            <h2 style="color:#1E88E5; margin:0 0 12px;">${siteName} - Xác nhận đặt vé</h2>
+            <p>Xin chào <strong>${customer_name || ''}</strong>,</p>
+            <p>Bạn đã đặt vé thành công. Mã đặt vé: <strong>#${booking.id}</strong></p>
+            <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
+              <p><strong>Ngày:</strong> ${new Date(booking.booking_date).toLocaleString('vi-VN')}</p>
+              <p><strong>Giờ:</strong> ${booking.start_time} - ${booking.end_time}</p>
+              <p><strong>Tổng tiền:</strong> ${booking.total_price || '0'}</p>
+              <p>${payText}</p>
             </div>
-          `;
+            <p>Nếu có bất kỳ thắc mắc nào, vui lòng phản hồi email này.</p>
+            <p style="color:#666;">Trân trọng,<br/>${siteName}</p>
+          </div>
+        `;
 
           // Try Resend first (simpler and works better on Render)
           if (process.env.RESEND_API_KEY) {
@@ -2047,9 +2047,9 @@ app.post('/api/bookings', async (req, res) => {
           }
 
           // Fallback: Direct SMTP sending
-          let nodemailer;
-          try {
-            nodemailer = (await import('nodemailer')).default;
+        let nodemailer;
+        try {
+          nodemailer = (await import('nodemailer')).default;
             console.log('📧 Nodemailer loaded successfully');
           } catch (e) {
             console.error('❌ Failed to load nodemailer:', e);
@@ -2124,10 +2124,10 @@ app.post('/api/bookings', async (req, res) => {
             const previewUrl = nodemailer.getTestMessageUrl(info);
             if (previewUrl) {
               console.log('✉️ Booking email preview URL:', previewUrl);
-            }
           }
+        }
           console.log('✅ Booking confirmation email sent to:', customer_email);
-        } catch (e) {
+    } catch (e) {
           console.error('❌ Failed to send booking confirmation email:', e);
           console.error('❌ Email error details:', {
             message: e.message,
@@ -2167,7 +2167,8 @@ app.post('/api/integrations/email', async (req, res) => {
     if (process.env.RESEND_API_KEY) {
       try {
         const resendApiKey = process.env.RESEND_API_KEY;
-        const resendFrom = process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev';
+        // Resend requires verified domain or onboarding@resend.dev - don't use SMTP_FROM if it's gmail.com
+        const resendFrom = process.env.RESEND_FROM || 'onboarding@resend.dev';
         
         console.log('📧 Attempting to send via Resend...');
         console.log('📧 Resend config:', {
@@ -2391,7 +2392,8 @@ app.post('/api/debug-email', async (req, res) => {
     if (process.env.RESEND_API_KEY) {
       try {
         const resendApiKey = process.env.RESEND_API_KEY;
-        const resendFrom = process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev';
+        // Resend requires verified domain or onboarding@resend.dev - don't use SMTP_FROM if it's gmail.com
+        const resendFrom = process.env.RESEND_FROM || 'onboarding@resend.dev';
         
         console.log('📧 Testing Resend directly...');
         const resendPayload = {
