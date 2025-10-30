@@ -175,6 +175,25 @@ export default function EventDetail() {
       const apiBase = API_BASE_URL.replace('/api', '');
       const url = `${apiBase}/api/bookings`;
       console.log('🌐 Making request to:', url);
+      console.log('🔍 Full API_BASE_URL:', API_BASE_URL);
+      console.log('🔍 Computed apiBase:', apiBase);
+      
+      // First check if backend is reachable
+      try {
+        console.log('🔍 Checking backend health...');
+        const healthResponse = await fetch(`${apiBase}/api/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000) // 5 second timeout for health check
+        });
+        if (healthResponse.ok) {
+          console.log('✅ Backend is reachable');
+        } else {
+          console.warn('⚠️ Backend health check returned:', healthResponse.status);
+        }
+      } catch (healthError) {
+        console.warn('⚠️ Backend health check failed (non-critical):', healthError.message);
+        // Continue anyway - might be temporary
+      }
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
@@ -234,7 +253,12 @@ export default function EventDetail() {
         }
         
         // Network error or CORS error
-        if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError')) {
+        if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError') || fetchError.message.includes('Network request failed')) {
+          console.error('❌ Network error details:', {
+            url,
+            message: fetchError.message,
+            name: fetchError.name
+          });
           throw new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.');
         }
         
