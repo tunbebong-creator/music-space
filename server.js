@@ -1932,33 +1932,63 @@ app.post('/api/bookings', async (req, res) => {
     console.log('✅ Response sent successfully');
 
     // Send confirmation email AFTER response is sent (non-blocking)
-      if (customer_email) {
-      // Use setImmediate to ensure email doesn't block
+    if (customer_email) {
+      console.log('📧 Scheduling email to be sent...');
+      // Use setImmediate to ensure email doesn't block, but also add error handling
       setImmediate(async () => {
         try {
-        const siteName = process.env.SITE_NAME || 'Music Space';
-        const payText = payment_method ? `Phương thức thanh toán: ${payment_method}` : 'Phương thức thanh toán: Thanh toán tại sự kiện';
-        const subject = `Xác nhận đặt vé #${booking.id}`;
-        const body = `
-          <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
-            <h2 style="color:#1E88E5; margin:0 0 12px;">${siteName} - Xác nhận đặt vé</h2>
-            <p>Xin chào <strong>${customer_name || ''}</strong>,</p>
-            <p>Bạn đã đặt vé thành công. Mã đặt vé: <strong>#${booking.id}</strong></p>
-            <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
-              <p><strong>Ngày:</strong> ${new Date(booking.booking_date).toLocaleString('vi-VN')}</p>
-              <p><strong>Giờ:</strong> ${booking.start_time} - ${booking.end_time}</p>
-              <p><strong>Tổng tiền:</strong> ${booking.total_price || '0'}</p>
-              <p>${payText}</p>
+          console.log('📧 Email sending started for:', customer_email);
+          const siteName = process.env.SITE_NAME || 'Music Space';
+          const payText = payment_method ? `Phương thức thanh toán: ${payment_method}` : 'Phương thức thanh toán: Thanh toán tại sự kiện';
+          const subject = `Xác nhận đặt vé #${booking.id}`;
+          const body = `
+            <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
+              <h2 style="color:#1E88E5; margin:0 0 12px;">${siteName} - Xác nhận đặt vé</h2>
+              <p>Xin chào <strong>${customer_name || ''}</strong>,</p>
+              <p>Bạn đã đặt vé thành công. Mã đặt vé: <strong>#${booking.id}</strong></p>
+              <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
+                <p><strong>Ngày:</strong> ${new Date(booking.booking_date).toLocaleString('vi-VN')}</p>
+                <p><strong>Giờ:</strong> ${booking.start_time} - ${booking.end_time}</p>
+                <p><strong>Tổng tiền:</strong> ${booking.total_price || '0'}</p>
+                <p>${payText}</p>
+              </div>
+              <p>Nếu có bất kỳ thắc mắc nào, vui lòng phản hồi email này.</p>
+              <p style="color:#666;">Trân trọng,<br/>${siteName}</p>
             </div>
-            <p>Nếu có bất kỳ thắc mắc nào, vui lòng phản hồi email này.</p>
-            <p style="color:#666;">Trân trọng,<br/>${siteName}</p>
-          </div>
-        `;
+          `;
 
-        // Lazy require nodemailer
-        let nodemailer;
-        try {
-          nodemailer = (await import('nodemailer')).default;
+          // Try to send via internal API endpoint first (more reliable)
+          try {
+            const emailPayload = {
+              to: customer_email,
+              subject,
+              body,
+              from_name: siteName
+            };
+            
+            // Call our own email endpoint internally
+            const emailResponse = await fetch(`http://localhost:${PORT}/api/integrations/email`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(emailPayload)
+            });
+            
+            if (emailResponse.ok) {
+              console.log('✅ Email sent via internal API endpoint');
+              return;
+            } else {
+              console.warn('⚠️ Internal email API failed, trying direct SMTP...');
+              const errorText = await emailResponse.text();
+              console.warn('⚠️ Error:', errorText);
+            }
+          } catch (apiError) {
+            console.warn('⚠️ Failed to send via internal API, trying direct SMTP:', apiError.message);
+          }
+
+          // Fallback: Direct SMTP
+          let nodemailer;
+          try {
+            nodemailer = (await import('nodemailer')).default;
             console.log('📧 Nodemailer loaded successfully');
           } catch (e) {
             console.error('❌ Failed to load nodemailer:', e);
@@ -1986,19 +2016,17 @@ app.post('/api/bookings', async (req, res) => {
               auth: process.env.SMTP_USER ? { 
                 user: process.env.SMTP_USER, 
                 pass: process.env.SMTP_PASS 
-              } : undefined
+              } : undefined,
+              // Add timeout and connection timeout
+              connectionTimeout: 10000,
+              greetingTimeout: 10000,
+              socketTimeout: 10000
             });
             
-            // Verify transporter connection
-            try {
-              await transporter.verify();
-              console.log('✅ SMTP transporter verified successfully');
-            } catch (verifyError) {
-              console.error('❌ SMTP verification failed:', verifyError.message);
-              throw verifyError;
-            }
+            // Skip verification on Render (might be blocked)
+            // Just try to send directly
+            console.log('📧 Sending email directly without verification...');
           } else {
-            // Skip email if no SMTP config - don't create test account as it might be slow
             console.log('⚠️ No SMTP config, skipping email');
             return;
           }
@@ -2021,8 +2049,8 @@ app.post('/api/bookings', async (req, res) => {
             const previewUrl = nodemailer.getTestMessageUrl(info);
             if (previewUrl) {
               console.log('✉️ Booking email preview URL:', previewUrl);
+            }
           }
-        }
           console.log('✅ Booking confirmation email sent to:', customer_email);
         } catch (e) {
           console.error('❌ Failed to send booking confirmation email:', e);
