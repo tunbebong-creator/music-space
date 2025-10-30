@@ -76,6 +76,27 @@ app.get('/uploads/:type/:filename', (req, res, next) => {
   return res.status(404).json({ error: 'File not found', type, filename, candidates });
 });
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Music Space API Server',
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      events: '/api/events',
+      spaces: '/api/spaces',
+      admin: '/api/admin'
+    }
+  });
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Debug: check uploads existence
 app.get('/api/debug/uploads', (req, res) => {
   try {
