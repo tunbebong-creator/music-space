@@ -1957,7 +1957,39 @@ app.post('/api/bookings', async (req, res) => {
             </div>
           `;
 
-          // Direct SMTP sending (better for Render)
+          // Try SendGrid first if API key is available
+          if (process.env.SENDGRID_API_KEY) {
+            try {
+              console.log('📧 Attempting to send via SendGrid...');
+              const sendGridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  personalizations: [{
+                    to: [{ email: customer_email, name: customer_name }],
+                    subject: subject
+                  }],
+                  from: { email: process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@musicspace.dev', name: siteName },
+                  content: [{ type: 'text/html', value: body }]
+                })
+              });
+              
+              if (sendGridResponse.ok) {
+                console.log('✅ Email sent successfully via SendGrid');
+                return;
+              } else {
+                const errorText = await sendGridResponse.text();
+                console.warn('⚠️ SendGrid failed:', sendGridResponse.status, errorText);
+              }
+            } catch (sgError) {
+              console.warn('⚠️ SendGrid error:', sgError.message);
+            }
+          }
+
+          // Fallback: Direct SMTP sending
           let nodemailer;
           try {
             nodemailer = (await import('nodemailer')).default;
@@ -1990,17 +2022,28 @@ app.post('/api/bookings', async (req, res) => {
                 pass: process.env.SMTP_PASS 
               } : undefined,
               // Add timeout and connection timeout to prevent hanging
-              connectionTimeout: 10000,
-              greetingTimeout: 10000,
-              socketTimeout: 10000,
+              connectionTimeout: 15000,
+              greetingTimeout: 15000,
+              socketTimeout: 15000,
               // Disable verification on Render (might be blocked)
               tls: {
-                rejectUnauthorized: false
-              }
+                rejectUnauthorized: false,
+                ciphers: 'SSLv3'
+              },
+              // Try both STARTTLS and direct TLS
+              requireTLS: false,
+              debug: true,
+              logger: true
             });
             
-            // Skip verification on Render (might be blocked by firewall)
-            console.log('📧 Skipping SMTP verification (Render might block)');
+            console.log('📧 Attempting SMTP connection...');
+            // Try to connect first
+            try {
+              await transporter.verify();
+              console.log('✅ SMTP connection verified');
+            } catch (verifyError) {
+              console.warn('⚠️ SMTP verification failed, but continuing anyway:', verifyError.message);
+            }
           } else {
             console.log('⚠️ No SMTP config, skipping email');
             return;
@@ -2035,8 +2078,11 @@ app.post('/api/bookings', async (req, res) => {
             code: e.code,
             response: e.response,
             responseCode: e.responseCode,
-            command: e.command
+            command: e.command,
+            syscall: e.syscall,
+            errno: e.errno
           });
+          // Log to database or external service for monitoring
           // Don't throw - email failure shouldn't affect booking
         }
       });
@@ -2058,6 +2104,38 @@ app.post('/api/integrations/email', async (req, res) => {
     
     if (!to) {
       return res.status(400).json({ error: 'Email recipient (to) is required' });
+    }
+    
+    // Try SendGrid first if API key is available
+    if (process.env.SENDGRID_API_KEY) {
+      try {
+        console.log('📧 Attempting to send via SendGrid...');
+        const sendGridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            personalizations: [{
+              to: [{ email: to }],
+              subject: subject
+            }],
+            from: { email: process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@musicspace.dev', name: from_name || 'Music Space' },
+            content: [{ type: 'text/html', value: body }]
+          })
+        });
+        
+        if (sendGridResponse.ok) {
+          console.log('✅ Email sent successfully via SendGrid');
+          return res.json({ success: true, method: 'sendgrid' });
+        } else {
+          const errorText = await sendGridResponse.text();
+          console.warn('⚠️ SendGrid failed:', sendGridResponse.status, errorText);
+        }
+      } catch (sgError) {
+        console.warn('⚠️ SendGrid error:', sgError.message);
+      }
     }
     
     let nodemailer;
@@ -2086,17 +2164,26 @@ app.post('/api/integrations/email', async (req, res) => {
           pass: process.env.SMTP_PASS 
         } : undefined,
         // Add timeouts to prevent hanging
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000,
         // Disable TLS verification on Render (might be blocked)
         tls: {
-          rejectUnauthorized: false
-        }
+          rejectUnauthorized: false,
+          ciphers: 'SSLv3'
+        },
+        debug: true,
+        logger: true
       });
       
-      // Skip verification on Render - might be blocked
-      console.log('📧 Skipping SMTP verification (might be blocked on Render)');
+      // Try to verify connection
+      try {
+        await transporter.verify();
+        console.log('✅ SMTP connection verified');
+      } catch (verifyError) {
+        console.warn('⚠️ SMTP verification failed:', verifyError.message);
+        // Continue anyway
+      }
     } else {
       console.log('⚠️ No SMTP config, using test account');
       const testAccount = await nodemailer.createTestAccount();
@@ -2127,7 +2214,7 @@ app.post('/api/integrations/email', async (req, res) => {
       console.log('✉️ Email preview URL:', preview);
     }
     
-    res.json({ success: true, preview, messageId: info.messageId });
+    res.json({ success: true, preview, messageId: info.messageId, method: 'smtp' });
   } catch (error) {
     console.error('❌ EMAIL ERROR (API):', error);
     console.error('❌ Error details:', {
@@ -2135,9 +2222,49 @@ app.post('/api/integrations/email', async (req, res) => {
       code: error.code,
       command: error.command,
       response: error.response,
-      responseCode: error.responseCode
+      responseCode: error.responseCode,
+      syscall: error.syscall,
+      errno: error.errno
     });
     res.status(500).json({ error: 'Failed to send email', details: String(error) });
+  }
+});
+
+// Test email endpoint
+app.post('/api/test-email', async (req, res) => {
+  try {
+    const { to = 'test@example.com' } = req.body;
+    console.log('🧪 Testing email to:', to);
+    
+    const testBody = `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>Test Email từ Music Space</h2>
+        <p>Nếu bạn nhận được email này, hệ thống email đang hoạt động!</p>
+        <p>Thời gian: ${new Date().toLocaleString('vi-VN')}</p>
+      </div>
+    `;
+    
+    // Use the same email sending logic
+    const emailResponse = await fetch(`http://localhost:${PORT}/api/integrations/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to,
+        subject: 'Test Email - Music Space',
+        body: testBody,
+        from_name: 'Music Space Test'
+      })
+    });
+    
+    if (emailResponse.ok) {
+      res.json({ success: true, message: 'Test email sent' });
+    } else {
+      const errorText = await emailResponse.text();
+      res.status(500).json({ error: 'Failed to send test email', details: errorText });
+    }
+  } catch (error) {
+    console.error('❌ Test email error:', error);
+    res.status(500).json({ error: 'Test email failed', details: String(error) });
   }
 });
 
