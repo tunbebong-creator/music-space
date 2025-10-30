@@ -9,6 +9,7 @@ export default function EventDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [showBookingModal, setShowBookingModal] = React.useState(false);
+  const [isBooking, setIsBooking] = React.useState(false);
   const [lightboxOpen, setLightboxOpen] = React.useState(false);
   const [lightboxIndex, setLightboxIndex] = React.useState(0);
   const [bookingData, setBookingData] = React.useState({
@@ -113,6 +114,8 @@ export default function EventDetail() {
 
   // Handle booking
   const handleBooking = async () => {
+    if (isBooking) return; // Prevent double submission
+    
     try {
       if (!event) {
         alert('Không tìm thấy thông tin sự kiện. Vui lòng thử lại!');
@@ -124,6 +127,8 @@ export default function EventDetail() {
         alert('Vui lòng điền đầy đủ thông tin bắt buộc!');
         return;
       }
+
+      setIsBooking(true);
 
       // Check if user is logged in (optional for booking)
       const token = localStorage.getItem('auth_token');
@@ -147,48 +152,80 @@ export default function EventDetail() {
 
       console.log('🔍 Booking payload:', payload);
 
-      // Make booking request with timeout
-      const bookingPromise = customAPI.entities.Booking.create(payload);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 30000)
-      );
-
-      const created = await Promise.race([bookingPromise, timeoutPromise]);
-      console.log('✅ Booking created:', created);
-
-      // Close modal immediately after successful booking
-      setBookingData({ name: '', email: '', phone: '', quantity: 1, notes: '' });
-      setShowBookingModal(false);
-
-      // Show success message
-      alert(`Đặt vé thành công!\n\nSự kiện: ${event.title}\nSố lượng: ${bookingData.quantity} vé\nTổng tiền: ${(parseFloat(event.price || 0) * bookingData.quantity).toLocaleString('vi-VN')} ${event.currency || 'VND'}\n\nEmail xác nhận sẽ được gửi tới: ${bookingData.email}`);
-
-      // Try to send email separately (non-blocking)
+      // Make booking request with AbortController for proper timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
       try {
-        await Core.SendEmail({
-          from_name: 'Music Space',
-          to: bookingData.email,
-          subject: `✅ Xác nhận đặt vé: ${event.title}`,
-          body: `
-            <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
-              <h2 style="color:#1E88E5; margin:0 0 12px;">Cảm ơn bạn đã đặt vé!</h2>
-              <p>Xin chào <strong>${bookingData.name}</strong>,</p>
-              <p>Bạn đã đặt <strong>${bookingData.quantity}</strong> vé cho sự kiện <strong>${event.title}</strong>.</p>
-              <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
-                <p><strong>Mã đặt vé:</strong> #${created.id}</p>
-                <p><strong>Thời gian:</strong> ${new Date(event.event_date).toLocaleString('vi-VN')}</p>
-                <p><strong>Tổng tiền:</strong> ${(Number(event.price || 0) * Number(bookingData.quantity || 1)).toLocaleString('vi-VN')} VND</p>
-                <p><strong>Thanh toán:</strong> Thanh toán tại sự kiện</p>
-              </div>
-              <p>Vui lòng đến sớm 15 phút để làm thủ tục.</p>
-              <p style="color:#666;">Trân trọng,<br/>Music Space</p>
-            </div>
-          `
+        const apiBase = API_BASE_URL.replace('/api', '');
+        const response = await fetch(`${apiBase}/api/bookings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` })
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
         });
-        console.log('✅ Confirmation email sent');
-      } catch (emailError) {
-        console.warn('⚠️ Email sending failed (non-critical):', emailError);
-        // Email failure doesn't affect booking success
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { error: errorText || `HTTP error! status: ${response.status}` };
+          }
+          throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
+        }
+
+        const created = await response.json();
+        console.log('✅ Booking created:', created);
+
+        // Close modal immediately after successful booking
+        setBookingData({ name: '', email: '', phone: '', quantity: 1, notes: '' });
+        setShowBookingModal(false);
+        setIsBooking(false);
+
+        // Show success message
+        alert(`Đặt vé thành công!\n\nSự kiện: ${event.title}\nSố lượng: ${bookingData.quantity} vé\nTổng tiền: ${(parseFloat(event.price || 0) * bookingData.quantity).toLocaleString('vi-VN')} ${event.currency || 'VND'}\n\nEmail xác nhận sẽ được gửi tới: ${bookingData.email}`);
+
+        // Try to send email separately (non-blocking)
+        try {
+          await Core.SendEmail({
+            from_name: 'Music Space',
+            to: bookingData.email,
+            subject: `✅ Xác nhận đặt vé: ${event.title}`,
+            body: `
+              <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
+                <h2 style="color:#1E88E5; margin:0 0 12px;">Cảm ơn bạn đã đặt vé!</h2>
+                <p>Xin chào <strong>${bookingData.name}</strong>,</p>
+                <p>Bạn đã đặt <strong>${bookingData.quantity}</strong> vé cho sự kiện <strong>${event.title}</strong>.</p>
+                <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
+                  <p><strong>Mã đặt vé:</strong> #${created.id}</p>
+                  <p><strong>Thời gian:</strong> ${new Date(event.event_date).toLocaleString('vi-VN')}</p>
+                  <p><strong>Tổng tiền:</strong> ${(Number(event.price || 0) * Number(bookingData.quantity || 1)).toLocaleString('vi-VN')} VND</p>
+                  <p><strong>Thanh toán:</strong> Thanh toán tại sự kiện</p>
+                </div>
+                <p>Vui lòng đến sớm 15 phút để làm thủ tục.</p>
+                <p style="color:#666;">Trân trọng,<br/>Music Space</p>
+              </div>
+            `
+          });
+          console.log('✅ Confirmation email sent');
+        } catch (emailError) {
+          console.warn('⚠️ Email sending failed (non-critical):', emailError);
+          // Email failure doesn't affect booking success
+        }
+
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Request timeout. Vui lòng thử lại.');
+        }
+        throw fetchError;
       }
 
     } catch (error) {
@@ -199,6 +236,8 @@ export default function EventDetail() {
         status: error.status,
         data: error.data
       });
+      
+      setIsBooking(false);
       
       // Show user-friendly error message
       const errorMessage = error.status === 400 
@@ -618,14 +657,20 @@ export default function EventDetail() {
                 <div className="flex gap-4 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                    disabled={isBooking}
+                    className={`flex-1 py-3 rounded-lg font-semibold transition-colors ${
+                      isBooking 
+                        ? 'bg-gray-400 text-white cursor-not-allowed' 
+                        : 'bg-blue-500 text-white hover:bg-blue-600'
+                    }`}
                   >
-                    Xác nhận đặt vé
+                    {isBooking ? 'Đang xử lý...' : 'Xác nhận đặt vé'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowBookingModal(false)}
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+                    disabled={isBooking}
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
                     Hủy
                   </button>
