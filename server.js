@@ -1932,61 +1932,109 @@ app.post('/api/bookings', async (req, res) => {
     console.log('✅ Response sent successfully');
 
     // Send confirmation email AFTER response is sent (non-blocking)
-    if (customer_email) {
+      if (customer_email) {
       // Use setImmediate to ensure email doesn't block
       setImmediate(async () => {
         try {
-          const siteName = process.env.SITE_NAME || 'Music Space';
-          const payText = payment_method ? `Phương thức thanh toán: ${payment_method}` : 'Phương thức thanh toán: Thanh toán tại sự kiện';
-          const subject = `Xác nhận đặt vé #${booking.id}`;
-          const body = `
-            <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
-              <h2 style="color:#1E88E5; margin:0 0 12px;">${siteName} - Xác nhận đặt vé</h2>
-              <p>Xin chào <strong>${customer_name || ''}</strong>,</p>
-              <p>Bạn đã đặt vé thành công. Mã đặt vé: <strong>#${booking.id}</strong></p>
-              <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
-                <p><strong>Ngày:</strong> ${new Date(booking.booking_date).toLocaleString('vi-VN')}</p>
-                <p><strong>Giờ:</strong> ${booking.start_time} - ${booking.end_time}</p>
-                <p><strong>Tổng tiền:</strong> ${booking.total_price || '0'}</p>
-                <p>${payText}</p>
-              </div>
-              <p>Nếu có bất kỳ thắc mắc nào, vui lòng phản hồi email này.</p>
-              <p style="color:#666;">Trân trọng,<br/>${siteName}</p>
+        const siteName = process.env.SITE_NAME || 'Music Space';
+        const payText = payment_method ? `Phương thức thanh toán: ${payment_method}` : 'Phương thức thanh toán: Thanh toán tại sự kiện';
+        const subject = `Xác nhận đặt vé #${booking.id}`;
+        const body = `
+          <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
+            <h2 style="color:#1E88E5; margin:0 0 12px;">${siteName} - Xác nhận đặt vé</h2>
+            <p>Xin chào <strong>${customer_name || ''}</strong>,</p>
+            <p>Bạn đã đặt vé thành công. Mã đặt vé: <strong>#${booking.id}</strong></p>
+            <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
+              <p><strong>Ngày:</strong> ${new Date(booking.booking_date).toLocaleString('vi-VN')}</p>
+              <p><strong>Giờ:</strong> ${booking.start_time} - ${booking.end_time}</p>
+              <p><strong>Tổng tiền:</strong> ${booking.total_price || '0'}</p>
+              <p>${payText}</p>
             </div>
-          `;
+            <p>Nếu có bất kỳ thắc mắc nào, vui lòng phản hồi email này.</p>
+            <p style="color:#666;">Trân trọng,<br/>${siteName}</p>
+          </div>
+        `;
 
-          // Lazy require nodemailer
-          let nodemailer;
-          try {
-            nodemailer = (await import('nodemailer')).default;
-          } catch {}
-          if (nodemailer) {
-            let transporter;
-            if (process.env.SMTP_HOST) {
-              transporter = nodemailer.createTransport({
-                host: process.env.SMTP_HOST,
-                port: Number(process.env.SMTP_PORT || 587),
-                secure: Boolean(process.env.SMTP_SECURE === 'true'),
-                auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined
-              });
-            } else {
-              // Skip email if no SMTP config - don't create test account as it might be slow
-              console.log('⚠️ No SMTP config, skipping email');
-              return;
-            }
-            const info = await transporter.sendMail({
-              from: process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@musicspace.dev',
-              to: customer_email,
-              subject,
-              html: body
-            });
-            if (nodemailer.getTestMessageUrl && info) {
-              console.log('✉️ Booking email preview URL:', nodemailer.getTestMessageUrl(info));
-            }
-            console.log('✅ Booking confirmation email sent to:', customer_email);
+        // Lazy require nodemailer
+        let nodemailer;
+        try {
+          nodemailer = (await import('nodemailer')).default;
+            console.log('📧 Nodemailer loaded successfully');
+          } catch (e) {
+            console.error('❌ Failed to load nodemailer:', e);
+            return;
           }
+          
+          if (!nodemailer) {
+            console.log('⚠️ Nodemailer not available');
+            return;
+          }
+          
+          let transporter;
+          if (process.env.SMTP_HOST) {
+            console.log('📧 Creating SMTP transporter with:', {
+              host: process.env.SMTP_HOST,
+              port: process.env.SMTP_PORT,
+              user: process.env.SMTP_USER,
+              hasPass: !!process.env.SMTP_PASS
+            });
+            
+            transporter = nodemailer.createTransport({
+              host: process.env.SMTP_HOST,
+              port: Number(process.env.SMTP_PORT || 587),
+              secure: Boolean(process.env.SMTP_SECURE === 'true'),
+              auth: process.env.SMTP_USER ? { 
+                user: process.env.SMTP_USER, 
+                pass: process.env.SMTP_PASS 
+              } : undefined
+            });
+            
+            // Verify transporter connection
+            try {
+              await transporter.verify();
+              console.log('✅ SMTP transporter verified successfully');
+            } catch (verifyError) {
+              console.error('❌ SMTP verification failed:', verifyError.message);
+              throw verifyError;
+            }
+          } else {
+            // Skip email if no SMTP config - don't create test account as it might be slow
+            console.log('⚠️ No SMTP config, skipping email');
+            return;
+          }
+          
+          console.log('📧 Sending email to:', customer_email);
+          const info = await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@musicspace.dev',
+            to: customer_email,
+            subject,
+            html: body
+          });
+          
+          console.log('✅ Email sent successfully:', {
+            messageId: info.messageId,
+            accepted: info.accepted,
+            rejected: info.rejected
+          });
+          
+          if (nodemailer.getTestMessageUrl && info) {
+            const previewUrl = nodemailer.getTestMessageUrl(info);
+            if (previewUrl) {
+              console.log('✉️ Booking email preview URL:', previewUrl);
+          }
+        }
+          console.log('✅ Booking confirmation email sent to:', customer_email);
         } catch (e) {
-          console.warn('⚠️ Failed to send booking confirmation email:', e.message);
+          console.error('❌ Failed to send booking confirmation email:', e);
+          console.error('❌ Email error details:', {
+            message: e.message,
+            stack: e.stack,
+            code: e.code,
+            response: e.response,
+            responseCode: e.responseCode,
+            command: e.command
+          });
+          // Don't throw - email failure shouldn't affect booking
         }
       });
     }

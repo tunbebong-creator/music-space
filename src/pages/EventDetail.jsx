@@ -220,33 +220,8 @@ export default function EventDetail() {
         // Show success message
         alert(`Đặt vé thành công!\n\nSự kiện: ${event.title}\nSố lượng: ${bookingData.quantity} vé\nTổng tiền: ${(parseFloat(event.price || 0) * bookingData.quantity).toLocaleString('vi-VN')} ${event.currency || 'VND'}\n\nEmail xác nhận sẽ được gửi tới: ${bookingData.email}`);
 
-        // Try to send email separately (non-blocking)
-        try {
-          await Core.SendEmail({
-            from_name: 'Music Space',
-            to: bookingData.email,
-            subject: `✅ Xác nhận đặt vé: ${event.title}`,
-            body: `
-              <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px;">
-                <h2 style="color:#1E88E5; margin:0 0 12px;">Cảm ơn bạn đã đặt vé!</h2>
-                <p>Xin chào <strong>${bookingData.name}</strong>,</p>
-                <p>Bạn đã đặt <strong>${bookingData.quantity}</strong> vé cho sự kiện <strong>${event.title}</strong>.</p>
-                <div style="background:#f7f7f7; padding:12px 16px; border-radius:8px; margin:16px 0;">
-                  <p><strong>Mã đặt vé:</strong> #${created.id}</p>
-                  <p><strong>Thời gian:</strong> ${new Date(event.event_date).toLocaleString('vi-VN')}</p>
-                  <p><strong>Tổng tiền:</strong> ${(Number(event.price || 0) * Number(bookingData.quantity || 1)).toLocaleString('vi-VN')} VND</p>
-                  <p><strong>Thanh toán:</strong> Thanh toán tại sự kiện</p>
-                </div>
-                <p>Vui lòng đến sớm 15 phút để làm thủ tục.</p>
-                <p style="color:#666;">Trân trọng,<br/>Music Space</p>
-              </div>
-            `
-          });
-          console.log('✅ Confirmation email sent');
-        } catch (emailError) {
-          console.warn('⚠️ Email sending failed (non-critical):', emailError);
-          // Email failure doesn't affect booking success
-        }
+        // Email is sent automatically by backend after booking is created
+        // No need to send from frontend
 
       } catch (fetchError) {
         clearTimeout(timeoutId);
