@@ -1244,8 +1244,7 @@ export default function Love() {
         onSuccess={(user) => {
           setUser(user);
           handleAuthSuccess();
-          // Redirect to homepage after login
-          navigate('/');
+          // Don't redirect - stay on current page
         }}
       />
 

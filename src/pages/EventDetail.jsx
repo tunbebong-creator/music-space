@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { customAPI } from "@/api/customClient";
 import { Core } from "@/api/integrations";
+import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -20,16 +21,15 @@ export default function EventDetail() {
 
   const buildImageUrl = (url) => {
     if (!url) return null;
-    if (url.startsWith('http://localhost:3001/uploads')) return url;
-    if (url.startsWith('/uploads/')) return `http://localhost:3001${url}`;
-    return `http://localhost:3001/uploads/events/${url}`;
+    return getUploadUrl(url);
   };
 
   // Fetch event details
   const { data: event, isLoading, error } = useQuery({
     queryKey: ['event', id],
     queryFn: async () => {
-      const response = await fetch(`http://localhost:3001/api/events/${id}`);
+      const apiBase = API_BASE_URL.replace('/api', '');
+      const response = await fetch(`${apiBase}/api/events/${id}`);
       if (!response.ok) throw new Error('Failed to fetch event');
       return response.json();
     }

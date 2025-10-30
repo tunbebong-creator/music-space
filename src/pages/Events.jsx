@@ -1,5 +1,6 @@
 
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { customAPI } from "@/api/customClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, MapPin, Users, Clock, Filter, Navigation, X } from "lucide-react";
@@ -10,6 +11,7 @@ import ModernAuthModal from "../components/ModernAuthModal";
 import Pagination from "../components/Pagination";
 
 export default function Events() {
+  const navigate = useNavigate();
   const [selectedEvent, setSelectedEvent] = React.useState(null);
   const [filterCategory, setFilterCategory] = React.useState("all");
   const [showModernAuthModal, setShowModernAuthModal] = React.useState(false);
@@ -64,7 +66,7 @@ export default function Events() {
 
   const handleRegister = (event) => {
     if (!user) {
-      setShowAuthModal(true);
+      setShowModernAuthModal(true);
       return;
     }
     registerEventMutation.mutate(event.id);
@@ -263,8 +265,8 @@ export default function Events() {
                     whileTap={{ scale: 0.97 }}
                     whileHover={{ y: -4 }}
                     onClick={() => {
-                      setSelectedEvent(event);
-                      setShowDetailModal(true);
+                      // Navigate to event detail page instead of modal
+                      navigate(`/event/${event.id}`);
                     }}
                     className="bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 cursor-pointer"
                   >
@@ -434,29 +436,6 @@ export default function Events() {
         )}
       </AnimatePresence>
 
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        context="event_register"
-      />
-
-      <style jsx global>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
-      
-      {/* Auth Modal */}
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)}
-        context="event_register"
-      />
-
       {/* Modern Auth Modal */}
       <ModernAuthModal
         isOpen={showModernAuthModal}
@@ -464,8 +443,7 @@ export default function Events() {
         onSuccess={(user) => {
           setUser(user);
           setShowModernAuthModal(false);
-          // Redirect to homepage after login
-          navigate('/');
+          // Don't redirect - stay on current page
         }}
       />
     </div>

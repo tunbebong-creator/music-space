@@ -1,5 +1,6 @@
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
   Users, 
@@ -36,6 +37,7 @@ import { API_BASE_URL, getUploadUrl } from '@/config/api.js';
 const API_BASE = API_BASE_URL.replace('/api', '');
 
 export default function Admin() {
+  const navigate = useNavigate();
   const [user, setUser] = React.useState(null);
   const [activeTab, setActiveTab] = React.useState("dashboard");
   const [loading, setLoading] = React.useState(true);
@@ -148,35 +150,35 @@ export default function Admin() {
   // API functions
   const fetchWithAuth = async (url, options = {}) => {
     try {
-      const token = localStorage.getItem('auth_token');
-      
-      console.log('🔍 Debug - Fetching URL:', url);
-      console.log('🔍 Debug - Token:', token);
-      
+    const token = localStorage.getItem('auth_token');
+    
+    console.log('🔍 Debug - Fetching URL:', url);
+    console.log('🔍 Debug - Token:', token);
+    
       const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
       const response = await fetch(fullUrl, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          ...options.headers,
-        },
-      });
-      
-      console.log('🔍 Debug - Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🔍 Debug - Response error:', errorText);
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...options.headers,
+      },
+    });
+    
+    console.log('🔍 Debug - Response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('🔍 Debug - Response error:', errorText);
         
         // Don't throw error for 404 or empty responses, return empty data instead
         if (response.status === 404) {
           return null;
         }
         
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
       const data = await response.json();
       return data;
     } catch (error) {
@@ -436,7 +438,7 @@ export default function Admin() {
           <p className="text-sm text-gray-500 mt-2">User: {user ? user.email : 'No user'}</p>
           <p className="text-sm text-gray-500">Role: {user?.role || 'No role'}</p>
           <button 
-            onClick={() => window.location.href = '/'}
+            onClick={() => navigate('/')}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Về trang chủ
@@ -460,12 +462,12 @@ export default function Admin() {
   const handleLogout = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_data');
-    window.location.href = '/';
+    navigate('/');
   };
 
   // Space handlers
   const handleEditSpace = (space) => {
-    window.location.href = `/EditSpace/${space.id}`;
+    navigate(`/EditSpace/${space.id}`);
   };
 
   const handleDeleteSpace = async (spaceId) => {
@@ -483,7 +485,7 @@ export default function Admin() {
 
   // Event handlers
   const handleEditEvent = (event) => {
-    window.location.href = `/EditEvent/${event.id}`;
+    navigate(`/EditEvent/${event.id}`);
   };
 
   const handleDeleteEvent = async (eventId) => {
@@ -807,19 +809,19 @@ export default function Admin() {
                       const userName = booking.user_name || booking.customer_name || booking.user_email || booking.customer_email || 'N/A';
                       const bookingName = booking.space_name || booking.event_title || booking.booking_name || 'N/A';
                       return (
-                        <div key={booking.id} className="flex items-center justify-between">
-                          <div>
+                    <div key={booking.id} className="flex items-center justify-between">
+                      <div>
                             <p className="font-medium text-gray-900">{bookingName}</p>
                             <p className="text-sm text-gray-500">{userName}</p>
-                          </div>
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                            booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
+                      </div>
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
                             {booking.status || 'pending'}
-                          </span>
-                        </div>
+                      </span>
+                    </div>
                       );
                     })
                   ) : (
@@ -972,7 +974,7 @@ export default function Admin() {
                     Refresh
                   </button>
                   <button
-                    onClick={() => window.location.href = '/AddSpace'}
+                    onClick={() => navigate('/AddSpace')}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     <UserPlus className="w-4 h-4" />
@@ -1120,14 +1122,14 @@ export default function Admin() {
                 <h2 className="text-xl font-semibold text-gray-900">Quản lý Events</h2>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => window.location.href = '/AdminEventManager'}
+                    onClick={() => navigate('/AdminEventManager')}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                   >
                     <FileText className="w-4 h-4" />
                     Event Manager
                   </button>
                   <button
-                    onClick={() => window.location.href = '/AddEvent'}
+                    onClick={() => navigate('/AddEvent')}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     <UserPlus className="w-4 h-4" />
@@ -1412,15 +1414,15 @@ export default function Admin() {
                       {contactData?.messages && contactData.messages.length > 0 ? (
                         contactData.messages.map((message) => (
                           <tr key={message.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">{message.name}</div>
-                                <div className="text-sm text-gray-500">{message.email}</div>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{message.name}</div>
+                              <div className="text-sm text-gray-500">{message.email}</div>
                                 {message.phone && (
                                   <div className="text-xs text-gray-400">{message.phone}</div>
                                 )}
-                              </div>
-                            </td>
+                            </div>
+                          </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                 message.type === 'space_owner' ? 'bg-green-100 text-green-800' :
@@ -1431,16 +1433,16 @@ export default function Admin() {
                               }`}>
                                 {getContactTypeLabel(message.type)}
                               </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {message.subject || 'Không có chủ đề'}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                              {message.message}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {format(new Date(message.created_at), 'dd/MM/yyyy HH:mm')}
-                            </td>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                            {message.message}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {format(new Date(message.created_at), 'dd/MM/yyyy HH:mm')}
+                          </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <button
                                 onClick={() => handleReplyMessage(message)}
@@ -1449,8 +1451,8 @@ export default function Admin() {
                                 <Mail className="w-4 h-4" />
                                 Trả lời
                               </button>
-                            </td>
-                          </tr>
+                          </td>
+                        </tr>
                         ))
                       ) : (
                         <tr>
@@ -2464,7 +2466,7 @@ export default function Admin() {
                 >
                   <XCircle className="w-6 h-6" />
                 </button>
-              </div>
+      </div>
 
               <div className="mb-4 p-4 bg-gray-50 rounded-lg">
                 <div className="mb-2">

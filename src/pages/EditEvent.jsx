@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 import { 
   ArrowLeft, 
   Upload, 
@@ -30,9 +31,7 @@ export default function EditEvent() {
 
   const buildImageUrl = (url) => {
     if (!url) return null;
-    if (url.startsWith('http://localhost:3001/uploads')) return url;
-    if (url.startsWith('/uploads/')) return `http://localhost:3001${url}`;
-    return `http://localhost:3001/uploads/events/${url}`;
+    return getUploadUrl(url);
   };
   const [formData, setFormData] = React.useState({
     title: '',
@@ -59,12 +58,17 @@ export default function EditEvent() {
   React.useEffect(() => {
     const loadEventData = async () => {
       try {
-        const token = localStorage.getItem('adminToken');
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
         if (!token) {
           throw new Error('No admin token found. Please login as admin.');
         }
 
-        const response = await fetch(`http://localhost:3001/api/events/${id}`);
+        const apiBase = API_BASE_URL.replace('/api', '');
+        const response = await fetch(`${apiBase}/api/events/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
         if (response.ok) {
           const event = await response.json();
@@ -123,9 +127,14 @@ export default function EditEvent() {
       formData.append('image', file);
       formData.append('type', type);
       
-      const response = await fetch('http://localhost:3001/api/upload', {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+      const uploadBaseUrl = API_BASE_URL.replace('/api', '');
+      const response = await fetch(`${uploadBaseUrl}/api/upload`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       if (!response.ok) {
@@ -133,7 +142,7 @@ export default function EditEvent() {
       }
       
       const result = await response.json();
-      return result.url;
+      return getUploadUrl(result.url);
     } catch (error) {
       console.error('Upload error:', error);
       return null;
@@ -212,14 +221,15 @@ export default function EditEvent() {
       const eventDateIso = formData.date ? `${formData.date}T${startTimeNormalized}` : '';
 
       const ensureAdminToken = async (forceRefresh = false) => {
-        let token = localStorage.getItem('adminToken');
+        let token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
         if (!token || forceRefresh) {
           try {
-            const tRes = await fetch('http://localhost:3001/api/generate-admin-token', { method: 'POST' });
+            const apiBase = API_BASE_URL.replace('/api', '');
+            const tRes = await fetch(`${apiBase}/api/generate-admin-token`, { method: 'POST' });
             if (tRes.ok) {
               const tData = await tRes.json();
               token = tData.token;
-              localStorage.setItem('adminToken', token);
+              localStorage.setItem('auth_token', token);
               localStorage.setItem('user_data', JSON.stringify(tData.user || { role: 'admin' }));
             }
           } catch (_) {}
@@ -255,7 +265,8 @@ export default function EditEvent() {
       console.log('🔍 Debug - Token:', token);
       console.log('🔍 Debug - Event data:', eventData);
       
-      const submit = async (jwt) => fetch(`http://localhost:3001/api/admin/events/${id}`, {
+      const apiBase = API_BASE_URL.replace('/api', '');
+      const submit = async (jwt) => fetch(`${apiBase}/api/admin/events/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
