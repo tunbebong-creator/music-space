@@ -525,6 +525,8 @@ export default function We() {
         onSuccess={(user) => {
           setUser(user);
           setShowModernAuthModal(false);
+          // Redirect to homepage after login
+          navigate('/');
         }}
       />
     </div>

@@ -5,12 +5,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Calendar, User, ArrowLeft, Clock, Tag, Share2, Heart, ChevronRight, 
   LogOut, MessageCircle, Edit, Trash2, Send, Smile, ThumbsUp, Heart as HeartIcon,
-  Laugh, Meh, ThumbsDown, X
+  Laugh, Meh, ThumbsDown, X, Image as ImageIcon, Loader2, ZoomIn
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { createPageUrl } from "@/utils";
+import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
 // Reactions component
 const ReactionsPanel = ({ postId, userReaction, onReactionChange }) => {
@@ -207,6 +208,9 @@ export default function WeArticle() {
   const [userReaction, setUserReaction] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editData, setEditData] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -241,7 +245,8 @@ export default function WeArticle() {
     queryKey: ['post-reactions', postId],
     queryFn: async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/blog-posts/${postId}/reactions`, {
+        const apiBase = API_BASE_URL.replace('/api', '');
+        const response = await fetch(`${apiBase}/api/blog-posts/${postId}/reactions`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
           }
@@ -265,7 +270,8 @@ export default function WeArticle() {
     queryKey: ['post-comments', postId],
     queryFn: async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/blog-posts/${postId}/comments`, {
+        const apiBase = API_BASE_URL.replace('/api', '');
+        const response = await fetch(`${apiBase}/api/blog-posts/${postId}/comments`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
           }
@@ -289,7 +295,8 @@ export default function WeArticle() {
         throw new Error('Vui lòng đăng nhập');
       }
       
-      const response = await fetch(`http://localhost:3001/api/blog-posts/${postId}/reactions`, {
+      const apiBase = API_BASE_URL.replace('/api', '');
+      const response = await fetch(`${apiBase}/api/blog-posts/${postId}/reactions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -323,7 +330,8 @@ export default function WeArticle() {
         throw new Error('Vui lòng đăng nhập');
       }
       
-      const response = await fetch(`http://localhost:3001/api/blog-posts/${postId}/comments`, {
+      const apiBase = API_BASE_URL.replace('/api', '');
+      const response = await fetch(`${apiBase}/api/blog-posts/${postId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -448,15 +456,81 @@ export default function WeArticle() {
 
   const handleEdit = () => {
     if (!post) return;
+    // Parse media_urls if it's a string
+    let mediaUrls = [];
+    if (post.media_urls) {
+      if (typeof post.media_urls === 'string') {
+        try {
+          mediaUrls = JSON.parse(post.media_urls);
+        } catch {
+          mediaUrls = [];
+        }
+      } else if (Array.isArray(post.media_urls)) {
+        mediaUrls = post.media_urls;
+      }
+    }
+    
+    // Add image_url to mediaUrls if exists
+    if (post.image_url && !mediaUrls.includes(post.image_url)) {
+      mediaUrls = [post.image_url, ...mediaUrls];
+    }
+    
     setEditData({
       title: post.title,
       content: post.content,
-      excerpt: post.excerpt,
       category: post.category,
       image_url: post.image_url,
-      media_urls: post.media_urls || []
+      media_urls: mediaUrls
     });
     setShowEditModal(true);
+  };
+
+  const handleImageUpload = async (file) => {
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('type', 'general');
+      
+      const token = localStorage.getItem('auth_token');
+      const uploadBaseUrl = API_BASE_URL.replace('/api', '');
+      const response = await fetch(`${uploadBaseUrl}/api/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+      
+      const result = await response.json();
+      const fullUrl = getUploadUrl(result.url);
+      
+      const currentMediaUrls = editData.media_urls || [];
+      setEditData({
+        ...editData,
+        media_urls: [...currentMediaUrls, fullUrl],
+        image_url: editData.image_url || fullUrl
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Lỗi upload: ' + error.message);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = (index) => {
+    const newMediaUrls = [...editData.media_urls];
+    newMediaUrls.splice(index, 1);
+    setEditData({
+      ...editData,
+      media_urls: newMediaUrls,
+      image_url: newMediaUrls[0] || ''
+    });
   };
 
   const handleDelete = async () => {
@@ -644,12 +718,10 @@ export default function WeArticle() {
                 mediaUrls = [post.image_url, ...mediaUrls];
               }
               
-              // Ensure URLs are full URLs
+              // Ensure URLs are full URLs using getUploadUrl
               mediaUrls = mediaUrls.map(url => {
                 if (!url) return null;
-                if (url.startsWith('http')) return url;
-                if (url.startsWith('/')) return `http://localhost:3001${url}`;
-                return `http://localhost:3001/${url}`;
+                return getUploadUrl(url);
               }).filter(Boolean);
               
               if (mediaUrls.length === 0) return null;
@@ -671,15 +743,23 @@ export default function WeArticle() {
                             }}
                           />
                         ) : (
-                          <img
-                            src={mediaUrl}
-                            alt={`${post.title} - ${idx + 1}`}
-                            className="w-full h-auto object-cover rounded-lg"
-                            onError={(e) => {
-                              console.error('Image load error:', mediaUrl);
-                              e.target.style.display = 'none';
-                            }}
-                          />
+                          <div className="relative group cursor-pointer" onClick={() => {
+                            setSelectedImage(mediaUrl);
+                            setShowImageModal(true);
+                          }}>
+                            <img
+                              src={mediaUrl}
+                              alt={`${post.title} - ${idx + 1}`}
+                              className="w-full h-auto object-cover rounded-lg transition-transform group-hover:scale-105"
+                              onError={(e) => {
+                                console.error('Image load error:', mediaUrl);
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
+                              <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
                         )}
                       </div>
                     );
@@ -846,16 +926,6 @@ export default function WeArticle() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Mô tả ngắn</label>
-                  <textarea
-                    value={editData.excerpt}
-                    onChange={(e) => setEditData({...editData, excerpt: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-blue-500"
-                    rows={3}
-                  />
-                </div>
-
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Nội dung</label>
                   <textarea
                     value={editData.content}
@@ -864,6 +934,62 @@ export default function WeArticle() {
                     rows={8}
                     required
                   />
+                </div>
+
+                {/* Image Upload Section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ảnh</label>
+                  
+                  {/* Display existing images */}
+                  {editData.media_urls && editData.media_urls.length > 0 && (
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      {editData.media_urls.map((url, idx) => (
+                        <div key={idx} className="relative group">
+                          <img
+                            src={url}
+                            alt={`Upload ${idx + 1}`}
+                            className="w-full h-32 object-cover rounded-lg cursor-pointer"
+                            onClick={() => {
+                              setSelectedImage(url);
+                              setShowImageModal(true);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(idx)}
+                            className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Upload Button */}
+                  <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-blue-500 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleImageUpload(e.target.files[0]);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    {uploadingImage ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                        <span className="text-gray-700">Đang upload...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="w-5 h-5 text-blue-600" />
+                        <span className="text-gray-700">Thêm ảnh/video</span>
+                      </>
+                    )}
+                  </label>
                 </div>
 
                 <div>
@@ -947,6 +1073,41 @@ export default function WeArticle() {
           </div>
         </section>
       )}
+
+      {/* Image Lightbox Modal */}
+      <AnimatePresence>
+        {showImageModal && selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4"
+            onClick={() => {
+              setShowImageModal(false);
+              setSelectedImage(null);
+            }}
+          >
+            <motion.img
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.8 }}
+              src={selectedImage}
+              alt="Full size"
+              className="max-w-full max-h-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={() => {
+                setShowImageModal(false);
+                setSelectedImage(null);
+              }}
+              className="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
