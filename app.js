@@ -1,4 +1,8 @@
 // Entry point for Render.com deployment
-// This file forwards to server.js to work with Render's default start command
-import('./server.js');
+// Import server.js which contains the Express app
+import('./server.js').catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
+
 
