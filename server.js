@@ -1961,7 +1961,8 @@ app.post('/api/bookings', async (req, res) => {
           if (process.env.RESEND_API_KEY) {
             try {
               const resendApiKey = process.env.RESEND_API_KEY;
-              const resendFrom = process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev';
+              // Resend requires verified domain or onboarding@resend.dev - don't use SMTP_FROM if it's gmail.com
+              const resendFrom = process.env.RESEND_FROM || 'onboarding@resend.dev';
               
               console.log('📧 Attempting to send booking email via Resend...');
               console.log('📧 Resend config:', {
