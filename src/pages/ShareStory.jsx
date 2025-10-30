@@ -14,6 +14,7 @@ import {
   Loader2
 } from "lucide-react";
 import { customAPI } from "@/api/customClient";
+import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
 export default function ShareStory() {
   const navigate = useNavigate();
@@ -58,7 +59,8 @@ export default function ShareStory() {
         formData.append('type', 'general');
         
         const token = localStorage.getItem('auth_token');
-        const response = await fetch('http://localhost:3001/api/upload', {
+        const uploadBaseUrl = API_BASE_URL.replace('/api', '');
+        const response = await fetch(`${uploadBaseUrl}/api/upload`, {
           method: 'POST',
           body: formData,
           headers: {
@@ -72,9 +74,7 @@ export default function ShareStory() {
         }
         
         const result = await response.json();
-        const fullUrl = result.url.startsWith('http') 
-          ? result.url 
-          : `http://localhost:3001${result.url}`;
+        const fullUrl = getUploadUrl(result.url);
         
         uploadedUrls.push({
           url: fullUrl,
