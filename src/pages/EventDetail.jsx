@@ -28,10 +28,21 @@ export default function EventDetail() {
   const { data: event, isLoading, error } = useQuery({
     queryKey: ['event', id],
     queryFn: async () => {
+      console.log('🔍 Fetching event:', id);
       const apiBase = API_BASE_URL.replace('/api', '');
-      const response = await fetch(`${apiBase}/api/events/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch event');
-      return response.json();
+      console.log('🔍 API Base URL:', apiBase);
+      const fullUrl = `${apiBase}/api/events/${id}`;
+      console.log('🔍 Full URL:', fullUrl);
+      const response = await fetch(fullUrl);
+      console.log('🔍 Response status:', response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Event fetch error:', errorText);
+        throw new Error('Failed to fetch event');
+      }
+      const data = await response.json();
+      console.log('✅ Event fetched:', data);
+      return data;
     }
   });
 
@@ -103,9 +114,22 @@ export default function EventDetail() {
   // Handle booking
   const handleBooking = async () => {
     try {
-      if (!event) return;
+      if (!event) {
+        alert('Không tìm thấy thông tin sự kiện. Vui lòng thử lại!');
+        return;
+      }
+
+      // Check if user is logged in
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        alert('Vui lòng đăng nhập để đặt vé!');
+        navigate('/');
+        return;
+      }
 
       const me = await customAPI.auth.me();
+      console.log('🔍 User info:', me);
+      
       const payload = {
         event_id: event.id,
         user_id: me?.id || null,
@@ -115,10 +139,16 @@ export default function EventDetail() {
         customer_name: bookingData.name,
         customer_phone: bookingData.phone,
         payment_method: 'Thanh toán tại sự kiện',
-        status: 'pending'
+        status: 'pending',
+        booking_date: event.event_date,
+        start_time: event.start_time,
+        end_time: event.end_time
       };
 
+      console.log('🔍 Booking payload:', payload);
+
       const created = await customAPI.entities.Booking.create(payload);
+      console.log('✅ Booking created:', created);
 
       // Send confirmation email (fallback if server email not configured is handled server-side)
       try {
@@ -142,15 +172,23 @@ export default function EventDetail() {
             </div>
           `
         });
-      } catch {}
+      } catch (emailError) {
+        console.warn('⚠️ Email sending failed:', emailError);
+        // Don't fail the booking if email fails
+      }
 
-      alert(`Đặt vé thành công!\n\nSự kiện: ${event.title}\nSố lượng: ${bookingData.quantity} vé\nTổng tiền: ${(parseFloat(event.price) * bookingData.quantity).toLocaleString('vi-VN')} ${event.currency || 'VND'}\n\nXác nhận đã gửi tới: ${bookingData.email}`);
+      alert(`Đặt vé thành công!\n\nSự kiện: ${event.title}\nSố lượng: ${bookingData.quantity} vé\nTổng tiền: ${(parseFloat(event.price || 0) * bookingData.quantity).toLocaleString('vi-VN')} ${event.currency || 'VND'}\n\nXác nhận đã gửi tới: ${bookingData.email}`);
 
       setBookingData({ name: '', email: '', phone: '', quantity: 1, notes: '' });
       setShowBookingModal(false);
     } catch (error) {
       console.error('❌ Booking error:', error);
-      alert('Có lỗi xảy ra khi đặt vé. Vui lòng thử lại!');
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        response: error.response
+      });
+      alert(`Có lỗi xảy ra khi đặt vé: ${error.message || 'Vui lòng thử lại sau!'}\n\nNếu vấn đề tiếp tục, vui lòng liên hệ với chúng tôi qua email.`);
     }
   };
 

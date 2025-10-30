@@ -40,15 +40,34 @@ class CustomAPI {
     };
 
     try {
+      console.log('🔍 API Request:', { url, method: config.method || 'GET', hasToken: !!token });
+      
       const response = await fetch(url, config);
       
+      console.log('🔍 API Response:', { status: response.status, statusText: response.statusText, url });
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ API Error Response:', { status: response.status, errorText, url });
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `HTTP error! status: ${response.status}` };
+        }
+        
+        const error = new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
+        error.status = response.status;
+        error.data = errorData;
+        throw error;
       }
       
-      return await response.json();
+      const data = await response.json();
+      console.log('✅ API Success:', { url, data });
+      return data;
     } catch (error) {
-      console.error('API request failed:', error);
+      console.error('❌ API request failed:', { url, error: error.message, status: error.status });
       throw error;
     }
   }
