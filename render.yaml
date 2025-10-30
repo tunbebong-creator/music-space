@@ -3,7 +3,7 @@ services:
     name: music-space-api
     env: node
     buildCommand: npm install
-    startCommand: node server.js
+    startCommand: npm start
     plan: free
     envVars:
       - key: NODE_ENV
@@ -22,3 +22,4 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
+
