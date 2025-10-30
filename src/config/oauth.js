@@ -1,3 +1,7 @@
+import { API_BASE_URL } from './api.js';
+
+const API_BASE = API_BASE_URL.replace('/api', '');
+
 // OAuth Configuration
 export const OAUTH_CONFIG = {
   GOOGLE: {
@@ -12,10 +16,13 @@ export const OAUTH_CONFIG = {
 };
 
 // Backend API endpoints
-export const API_ENDPOINTS = {
-  GOOGLE_AUTH: 'http://localhost:3001/api/auth/google', // GET - get OAuth URL
-  GOOGLE_CALLBACK: 'http://localhost:3001/api/auth/google/callback', // POST - handle callback
-  FACEBOOK_AUTH: 'http://localhost:3001/api/auth/facebook',
-  LOGIN: 'http://localhost:3001/api/auth/login',
-  REGISTER: 'http://localhost:3001/api/auth/register'
+export const OAUTH_ENDPOINTS = {
+  GOOGLE_AUTH: `${API_BASE}/api/auth/google`, // GET - get OAuth URL
+  GOOGLE_CALLBACK: `${API_BASE}/api/auth/google/callback`, // POST - handle callback
+  FACEBOOK_AUTH: `${API_BASE}/api/auth/facebook`,
+  LOGIN: `${API_BASE}/api/auth/login`,
+  REGISTER: `${API_BASE}/api/auth/register`
 };
+
+// Legacy export for backward compatibility
+export const API_ENDPOINTS = OAUTH_ENDPOINTS;

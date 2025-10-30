@@ -1,7 +1,9 @@
+import { API_BASE_URL } from '../config/api.js';
+
 // Custom API client to replace base44
 class CustomAPI {
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+    this.baseUrl = API_BASE_URL;
     // Support both legacy and new token keys
     this.authToken = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
   }

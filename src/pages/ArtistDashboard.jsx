@@ -25,7 +25,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 
-const API_BASE = 'http://localhost:3001/api';
+import { API_BASE_URL } from '@/config/api.js';
+
+const API_BASE = API_BASE_URL;
 
 export default function ArtistDashboard() {
   const [user, setUser] = React.useState(null);
