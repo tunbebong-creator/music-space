@@ -2,7 +2,7 @@ services:
   - type: web
     name: music-space-api
     env: node
-    buildCommand: npm install
+    buildCommand: npm install --legacy-peer-deps
     startCommand: npm start
     plan: free
     envVars:
@@ -22,4 +22,5 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
+
 
