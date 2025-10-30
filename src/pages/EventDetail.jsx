@@ -183,6 +183,7 @@ export default function EventDetail() {
       }, 60000); // 60 second timeout
       
       try {
+        console.log('🔍 Starting fetch request...');
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -250,9 +251,18 @@ export default function EventDetail() {
       } catch (fetchError) {
         clearTimeout(timeoutId);
         console.error('❌ Fetch error:', fetchError);
+        console.error('❌ Fetch error type:', fetchError.name);
+        console.error('❌ Fetch error message:', fetchError.message);
+        
         if (fetchError.name === 'AbortError') {
           throw new Error('Request timeout. Vui lòng thử lại.');
         }
+        
+        // Network error or CORS error
+        if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError')) {
+          throw new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.');
+        }
+        
         throw fetchError;
       }
 
