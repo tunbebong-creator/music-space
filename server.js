@@ -1957,7 +1957,38 @@ app.post('/api/bookings', async (req, res) => {
             </div>
           `;
 
-          // Try SendGrid first if API key is available
+          // Try Resend first (simpler and works better on Render)
+          if (process.env.RESEND_API_KEY) {
+            try {
+              console.log('📧 Attempting to send via Resend...');
+              const resendResponse = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  from: process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev',
+                  to: [customer_email],
+                  subject: subject,
+                  html: body
+                })
+              });
+              
+              if (resendResponse.ok) {
+                const resendData = await resendResponse.json();
+                console.log('✅ Email sent successfully via Resend:', resendData);
+                return;
+              } else {
+                const errorText = await resendResponse.text();
+                console.warn('⚠️ Resend failed:', resendResponse.status, errorText);
+              }
+            } catch (resendError) {
+              console.warn('⚠️ Resend error:', resendError.message);
+            }
+          }
+
+          // Try SendGrid as fallback
           if (process.env.SENDGRID_API_KEY) {
             try {
               console.log('📧 Attempting to send via SendGrid...');
@@ -2106,7 +2137,38 @@ app.post('/api/integrations/email', async (req, res) => {
       return res.status(400).json({ error: 'Email recipient (to) is required' });
     }
     
-    // Try SendGrid first if API key is available
+    // Try Resend first (simpler and works better on Render)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        console.log('📧 Attempting to send via Resend...');
+        const resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev',
+            to: [to],
+            subject: subject,
+            html: body
+          })
+        });
+        
+        if (resendResponse.ok) {
+          const resendData = await resendResponse.json();
+          console.log('✅ Email sent successfully via Resend:', resendData);
+          return res.json({ success: true, method: 'resend', data: resendData });
+        } else {
+          const errorText = await resendResponse.text();
+          console.warn('⚠️ Resend failed:', resendResponse.status, errorText);
+        }
+      } catch (resendError) {
+        console.warn('⚠️ Resend error:', resendError.message);
+      }
+    }
+
+    // Try SendGrid as fallback
     if (process.env.SENDGRID_API_KEY) {
       try {
         console.log('📧 Attempting to send via SendGrid...');
@@ -2230,7 +2292,7 @@ app.post('/api/integrations/email', async (req, res) => {
   }
 });
 
-// Test email endpoint
+// Test email endpoint - Direct call to email logic
 app.post('/api/test-email', async (req, res) => {
   try {
     const { to = 'test@example.com' } = req.body;
@@ -2244,8 +2306,8 @@ app.post('/api/test-email', async (req, res) => {
       </div>
     `;
     
-    // Use the same email sending logic
-    const emailResponse = await fetch(`http://localhost:${PORT}/api/integrations/email`, {
+    // Call email endpoint directly
+    const emailResponse = await fetch(`${req.protocol}://${req.get('host')}/api/integrations/email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2257,7 +2319,8 @@ app.post('/api/test-email', async (req, res) => {
     });
     
     if (emailResponse.ok) {
-      res.json({ success: true, message: 'Test email sent' });
+      const result = await emailResponse.json();
+      res.json({ success: true, message: 'Test email sent', result });
     } else {
       const errorText = await emailResponse.text();
       res.status(500).json({ error: 'Failed to send test email', details: errorText });
