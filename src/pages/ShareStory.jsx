@@ -59,36 +59,71 @@ export default function ShareStory() {
         formData.append('type', 'general');
         
         const token = localStorage.getItem('auth_token');
-        const uploadBaseUrl = API_BASE_URL.replace('/api', '');
-        const response = await fetch(`${uploadBaseUrl}/api/upload`, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
-          throw new Error(errorData.error || 'Upload failed');
+        if (!token) {
+          alert('Vui lòng đăng nhập để upload ảnh');
+          setUploadingMedia(false);
+          return;
         }
         
-        const result = await response.json();
-        const fullUrl = getUploadUrl(result.url);
+        const uploadBaseUrl = API_BASE_URL.replace('/api', '');
+        console.log('🔍 Uploading file:', { fileName: file.name, fileSize: file.size, uploadBaseUrl });
         
-        uploadedUrls.push({
-          url: fullUrl,
-          type: file.type.startsWith('video/') ? 'video' : 'image',
-          file: file
-        });
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+        
+        try {
+          const response = await fetch(`${uploadBaseUrl}/api/upload`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          console.log('🔍 Upload response status:', response.status);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('🔍 Upload error response:', errorText);
+            let errorData;
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { error: errorText || 'Upload failed' };
+            }
+            throw new Error(errorData.error || 'Upload failed');
+          }
+          
+          const result = await response.json();
+          console.log('✅ Upload successful:', result);
+          const fullUrl = getUploadUrl(result.url);
+          
+          uploadedUrls.push({
+            url: fullUrl,
+            type: file.type.startsWith('video/') ? 'video' : 'image',
+            file: file
+          });
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          if (fetchError.name === 'AbortError') {
+            throw new Error('Upload timeout. Vui lòng thử lại với file nhỏ hơn.');
+          }
+          throw fetchError;
+        }
       }
       
-      setFormData(prev => ({
-        ...prev,
-        mediaFiles: [...prev.mediaFiles, ...uploadedUrls]
-      }));
+      if (uploadedUrls.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          mediaFiles: [...prev.mediaFiles, ...uploadedUrls]
+        }));
+      }
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       alert('Lỗi upload: ' + error.message);
     } finally {
       setUploadingMedia(false);
@@ -259,7 +294,14 @@ export default function ShareStory() {
                   type="file"
                   accept="image/*,video/*"
                   multiple
-                  onChange={(e) => handleFileUpload(e.target.files)}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleFileUpload(e.target.files);
+                      // Reset input after handling
+                      e.target.value = '';
+                    }
+                  }}
+                  disabled={uploadingMedia}
                   className="hidden"
                 />
                 {uploadingMedia ? (

@@ -219,8 +219,8 @@ export default function WeArticle() {
         if (userData) {
           setUser(JSON.parse(userData));
         } else {
-          const currentUser = await customAPI.auth.me();
-          setUser(currentUser);
+        const currentUser = await customAPI.auth.me();
+        setUser(currentUser);
         }
       } catch (error) {
         setUser(null);
@@ -523,30 +523,64 @@ export default function WeArticle() {
       formData.append('type', 'general');
       
       const token = localStorage.getItem('auth_token');
-      const uploadBaseUrl = API_BASE_URL.replace('/api', '');
-      const response = await fetch(`${uploadBaseUrl}/api/upload`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Upload failed');
+      if (!token) {
+        alert('Vui lòng đăng nhập để upload ảnh');
+        setUploadingImage(false);
+        return;
       }
       
-      const result = await response.json();
-      const fullUrl = getUploadUrl(result.url);
+      const uploadBaseUrl = API_BASE_URL.replace('/api', '');
+      console.log('🔍 Uploading image in edit modal:', { fileName: file.name, fileSize: file.size, uploadBaseUrl });
       
-      const currentMediaUrls = editData.media_urls || [];
-      setEditData({
-        ...editData,
-        media_urls: [...currentMediaUrls, fullUrl],
-        image_url: editData.image_url || fullUrl
-      });
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
+      try {
+        const response = await fetch(`${uploadBaseUrl}/api/upload`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log('🔍 Upload response status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('🔍 Upload error response:', errorText);
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { error: errorText || 'Upload failed' };
+          }
+          throw new Error(errorData.error || 'Upload failed');
+        }
+        
+        const result = await response.json();
+        console.log('✅ Upload successful:', result);
+        const fullUrl = getUploadUrl(result.url);
+        
+        const currentMediaUrls = editData.media_urls || [];
+        setEditData({
+          ...editData,
+          media_urls: [...currentMediaUrls, fullUrl],
+          image_url: editData.image_url || fullUrl
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Upload timeout. Vui lòng thử lại với file nhỏ hơn.');
+        }
+        throw fetchError;
+      }
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       alert('Lỗi upload: ' + error.message);
     } finally {
       setUploadingImage(false);
@@ -645,15 +679,15 @@ export default function WeArticle() {
                 >
                   <Edit className="w-5 h-5" />
                 </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
                   onClick={handleDelete}
                   className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
                   title="Xóa"
                 >
                   <Trash2 className="w-5 h-5" />
-                </motion.button>
+            </motion.button>
               </>
             )}
             <motion.button
@@ -1004,8 +1038,11 @@ export default function WeArticle() {
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
                           handleImageUpload(e.target.files[0]);
+                          // Reset input after handling
+                          e.target.value = '';
                         }
                       }}
+                      disabled={uploadingImage}
                       className="hidden"
                     />
                     {uploadingImage ? (
@@ -1107,7 +1144,7 @@ export default function WeArticle() {
       {/* Image Lightbox Modal */}
       <AnimatePresence>
         {showImageModal && selectedImage && (
-          <motion.div
+        <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1134,8 +1171,8 @@ export default function WeArticle() {
               className="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"
             >
               <X className="w-6 h-6" />
-            </button>
-          </motion.div>
+              </button>
+        </motion.div>
         )}
       </AnimatePresence>
     </div>
