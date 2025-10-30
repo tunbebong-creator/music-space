@@ -1,52 +1,46 @@
-# QUICK DEPLOY FRONTEND - Làm theo các bước sau:
+# DEPLOY FRONTEND LÊN RENDER - Hướng dẫn chi tiết
 
-## Cách 1: Vercel (Khuyến nghị - Dễ nhất)
+## ✅ Backend đã chạy: `https://usic-space-server.onrender.com`
 
-1. **Vào:** https://vercel.com
-2. **Đăng nhập** bằng GitHub (nếu chưa có tài khoản thì đăng ký)
-3. **Click "Add New" → "Project"**
-4. **Import GitHub repo:** Chọn `tunbebong-creator/music-space`
-5. **Cấu hình:**
-   - Framework Preset: **Vite** (hoặc để Vercel tự detect)
-   - Root Directory: để trống (hoặc `/`)
-   - Build Command: `npm run build` (hoặc để trống)
-   - Output Directory: `dist` (hoặc để trống)
-   - Install Command: `npm install --legacy-peer-deps`
+## Bước deploy Frontend trên Render:
 
-6. **Thêm Environment Variable:**
-   - Name: `VITE_API_URL`
-   - Value: `https://usic-space-server.onrender.com/api`
-
-7. **Click "Deploy"**
-
-Sau khi deploy xong, Vercel sẽ cho bạn URL: `https://your-project.vercel.app`
-
----
-
-## Cách 2: Render Static Site
+### Cách 1: Deploy qua Render Dashboard (Khuyến nghị)
 
 1. **Vào:** https://dashboard.render.com
 2. **Click "New" → "Static Site"**
-3. **Connect GitHub:** Chọn repo `tunbebong-creator/music-space`
-4. **Cấu hình:**
-   - Name: `music-space-frontend` (hoặc tên bạn muốn)
+3. **Connect GitHub:**
+   - Chọn repo: `tunbebong-creator/music-space`
    - Branch: `main`
-   - Build Command: `npm install --legacy-peer-deps && npm run build`
-   - Publish Directory: `dist`
-
+4. **Cấu hình:**
+   - **Name:** `music-space-frontend` (hoặc tên bạn muốn)
+   - **Build Command:** `npm install --legacy-peer-deps && npm run build`
+   - **Publish Directory:** `dist`
 5. **Thêm Environment Variable:**
-   - Key: `VITE_API_URL`
-   - Value: `https://usic-space-server.onrender.com/api`
-
+   - **Key:** `VITE_API_URL`
+   - **Value:** `https://usic-space-server.onrender.com/api`
 6. **Click "Create Static Site"**
+
+Render sẽ tự động:
+- Pull code từ GitHub
+- Chạy build command
+- Deploy static files từ folder `dist`
+- Cho bạn URL frontend
 
 ---
 
-## Lưu ý quan trọng:
+### Cách 2: Dùng Blueprint từ render.yaml
 
-- ✅ File `vercel.json` đã được tạo và push lên GitHub
-- ✅ Code đã được cập nhật để dùng Render backend URL
-- ✅ Build đã test thành công local
-- ⚠️ Nhớ thêm Environment Variable `VITE_API_URL` khi deploy!
+File `render.yaml` đã được cập nhật nhưng Render có thể không support static site trong render.yaml.
 
-Sau khi deploy xong, bạn sẽ có URL cho frontend và có thể truy cập web app!
+**Tốt nhất là dùng Cách 1** (tạo Static Site thủ công trong Dashboard).
+
+---
+
+## Sau khi deploy xong:
+
+- ✅ Backend API: `https://usic-space-server.onrender.com`
+- ✅ Frontend Web: `https://music-space-frontend.onrender.com` (hoặc URL Render cung cấp)
+
+Frontend sẽ tự động gọi API từ Render backend!
+
+**Lưu ý:** Nhớ thêm Environment Variable `VITE_API_URL` trong Render Dashboard!
