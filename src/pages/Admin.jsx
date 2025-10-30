@@ -145,10 +145,6 @@ export default function Admin() {
   //   };
   // }, [activeTab, user]);
 
-import { API_BASE_URL, getUploadUrl } from '@/config/api.js';
-
-// ... existing code ...
-
   // API functions
   const fetchWithAuth = async (url, options = {}) => {
     try {
