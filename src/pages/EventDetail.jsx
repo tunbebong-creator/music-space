@@ -119,15 +119,15 @@ export default function EventDetail() {
         return;
       }
 
-      // Check if user is logged in
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        alert('Vui lòng đăng nhập để đặt vé!');
-        navigate('/');
+      // Validate form data
+      if (!bookingData.name || !bookingData.email || !bookingData.phone) {
+        alert('Vui lòng điền đầy đủ thông tin bắt buộc!');
         return;
       }
 
-      const me = await customAPI.auth.me();
+      // Check if user is logged in (optional for booking)
+      const token = localStorage.getItem('auth_token');
+      const me = token ? await customAPI.auth.me().catch(() => null) : null;
       console.log('🔍 User info:', me);
       
       const payload = {
@@ -147,10 +147,23 @@ export default function EventDetail() {
 
       console.log('🔍 Booking payload:', payload);
 
-      const created = await customAPI.entities.Booking.create(payload);
+      // Make booking request with timeout
+      const bookingPromise = customAPI.entities.Booking.create(payload);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 30000)
+      );
+
+      const created = await Promise.race([bookingPromise, timeoutPromise]);
       console.log('✅ Booking created:', created);
 
-      // Send confirmation email (fallback if server email not configured is handled server-side)
+      // Close modal immediately after successful booking
+      setBookingData({ name: '', email: '', phone: '', quantity: 1, notes: '' });
+      setShowBookingModal(false);
+
+      // Show success message
+      alert(`Đặt vé thành công!\n\nSự kiện: ${event.title}\nSố lượng: ${bookingData.quantity} vé\nTổng tiền: ${(parseFloat(event.price || 0) * bookingData.quantity).toLocaleString('vi-VN')} ${event.currency || 'VND'}\n\nEmail xác nhận sẽ được gửi tới: ${bookingData.email}`);
+
+      // Try to send email separately (non-blocking)
       try {
         await Core.SendEmail({
           from_name: 'Music Space',
@@ -172,23 +185,31 @@ export default function EventDetail() {
             </div>
           `
         });
+        console.log('✅ Confirmation email sent');
       } catch (emailError) {
-        console.warn('⚠️ Email sending failed:', emailError);
-        // Don't fail the booking if email fails
+        console.warn('⚠️ Email sending failed (non-critical):', emailError);
+        // Email failure doesn't affect booking success
       }
 
-      alert(`Đặt vé thành công!\n\nSự kiện: ${event.title}\nSố lượng: ${bookingData.quantity} vé\nTổng tiền: ${(parseFloat(event.price || 0) * bookingData.quantity).toLocaleString('vi-VN')} ${event.currency || 'VND'}\n\nXác nhận đã gửi tới: ${bookingData.email}`);
-
-      setBookingData({ name: '', email: '', phone: '', quantity: 1, notes: '' });
-      setShowBookingModal(false);
     } catch (error) {
       console.error('❌ Booking error:', error);
       console.error('❌ Error details:', {
         message: error.message,
         stack: error.stack,
-        response: error.response
+        status: error.status,
+        data: error.data
       });
-      alert(`Có lỗi xảy ra khi đặt vé: ${error.message || 'Vui lòng thử lại sau!'}\n\nNếu vấn đề tiếp tục, vui lòng liên hệ với chúng tôi qua email.`);
+      
+      // Show user-friendly error message
+      const errorMessage = error.status === 400 
+        ? 'Thông tin đặt vé không hợp lệ. Vui lòng kiểm tra lại.'
+        : error.status === 401 || error.status === 403
+        ? 'Vui lòng đăng nhập để đặt vé.'
+        : error.message?.includes('timeout')
+        ? 'Request timeout. Vui lòng thử lại.'
+        : `Có lỗi xảy ra khi đặt vé: ${error.message || 'Vui lòng thử lại sau!'}`;
+      
+      alert(errorMessage);
     }
   };
 

@@ -1902,8 +1902,11 @@ app.post('/api/bookings', async (req, res) => {
     const booking = insertResult.rows[0];
 
     // Send confirmation email if customer_email provided and email integration is configured
-    try {
+    // Do this asynchronously so it doesn't block the response
       if (customer_email) {
+      // Fire and forget - don't await
+      (async () => {
+        try {
         const siteName = process.env.SITE_NAME || 'Music Space';
         const payText = payment_method ? `Phương thức thanh toán: ${payment_method}` : 'Phương thức thanh toán: Thanh toán tại sự kiện';
         const subject = `Xác nhận đặt vé #${booking.id}`;
@@ -1956,12 +1959,15 @@ app.post('/api/bookings', async (req, res) => {
           if (nodemailer.getTestMessageUrl && info) {
             console.log('✉️ Booking email preview URL:', nodemailer.getTestMessageUrl(info));
           }
-        }
+            console.log('✅ Booking confirmation email sent to:', customer_email);
       }
     } catch (e) {
-      console.warn('Failed to send booking confirmation email:', e.message);
+          console.warn('⚠️ Failed to send booking confirmation email:', e.message);
+        }
+      })();
     }
 
+    // Return booking immediately without waiting for email
     res.json(booking);
   } catch (error) {
     console.error('Error creating booking:', error);
