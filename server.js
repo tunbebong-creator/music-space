@@ -1960,32 +1960,57 @@ app.post('/api/bookings', async (req, res) => {
           // Try Resend first (simpler and works better on Render)
           if (process.env.RESEND_API_KEY) {
             try {
-              console.log('📧 Attempting to send via Resend...');
+              const resendApiKey = process.env.RESEND_API_KEY;
+              const resendFrom = process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev';
+              
+              console.log('📧 Attempting to send booking email via Resend...');
+              console.log('📧 Resend config:', {
+                hasApiKey: !!resendApiKey,
+                apiKeyLength: resendApiKey?.length || 0,
+                from: resendFrom,
+                to: customer_email
+              });
+              
+              const resendPayload = {
+                from: resendFrom,
+                to: [customer_email],
+                subject: subject,
+                html: body
+              };
+              
               const resendResponse = await fetch('https://api.resend.com/emails', {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                  'Authorization': `Bearer ${resendApiKey}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                  from: process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev',
-                  to: [customer_email],
-                  subject: subject,
-                  html: body
-                })
+                body: JSON.stringify(resendPayload)
               });
               
+              const responseText = await resendResponse.text();
+              console.log('📧 Resend response status:', resendResponse.status);
+              console.log('📧 Resend response text:', responseText);
+              
               if (resendResponse.ok) {
-                const resendData = await resendResponse.json();
-                console.log('✅ Email sent successfully via Resend:', resendData);
-                return;
+                try {
+                  const resendData = JSON.parse(responseText);
+                  console.log('✅ Booking email sent successfully via Resend:', resendData);
+                  return; // Success, exit early
+                } catch (parseError) {
+                  console.log('✅ Booking email sent successfully via Resend');
+                  return; // Success even if response is not JSON
+                }
               } else {
-                const errorText = await resendResponse.text();
-                console.warn('⚠️ Resend failed:', resendResponse.status, errorText);
+                console.error('❌ Resend failed for booking:', resendResponse.status, responseText);
+                // Continue to try fallback methods
               }
             } catch (resendError) {
-              console.warn('⚠️ Resend error:', resendError.message);
+              console.error('❌ Resend error for booking:', resendError.message);
+              console.error('❌ Resend error stack:', resendError.stack);
+              // Continue to try other methods
             }
+          } else {
+            console.log('⚠️ RESEND_API_KEY not found, skipping Resend');
           }
 
           // Try SendGrid as fallback
@@ -2140,32 +2165,59 @@ app.post('/api/integrations/email', async (req, res) => {
     // Try Resend first (simpler and works better on Render)
     if (process.env.RESEND_API_KEY) {
       try {
+        const resendApiKey = process.env.RESEND_API_KEY;
+        const resendFrom = process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev';
+        
         console.log('📧 Attempting to send via Resend...');
+        console.log('📧 Resend config:', {
+          hasApiKey: !!resendApiKey,
+          apiKeyLength: resendApiKey?.length || 0,
+          from: resendFrom,
+          to: to
+        });
+        
+        const resendPayload = {
+          from: resendFrom,
+          to: Array.isArray(to) ? to : [to],
+          subject: subject || 'Test Email',
+          html: body || '<p>Test email</p>'
+        };
+        
+        console.log('📧 Resend payload:', JSON.stringify(resendPayload, null, 2));
+        
         const resendResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Authorization': `Bearer ${resendApiKey}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            from: process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev',
-            to: [to],
-            subject: subject,
-            html: body
-          })
+          body: JSON.stringify(resendPayload)
         });
         
+        const responseText = await resendResponse.text();
+        console.log('📧 Resend response status:', resendResponse.status);
+        console.log('📧 Resend response text:', responseText);
+        
         if (resendResponse.ok) {
-          const resendData = await resendResponse.json();
-          console.log('✅ Email sent successfully via Resend:', resendData);
-          return res.json({ success: true, method: 'resend', data: resendData });
+          try {
+            const resendData = JSON.parse(responseText);
+            console.log('✅ Email sent successfully via Resend:', resendData);
+            return res.json({ success: true, method: 'resend', data: resendData });
+          } catch (parseError) {
+            console.log('✅ Email sent successfully via Resend (response text):', responseText);
+            return res.json({ success: true, method: 'resend', message: responseText });
+          }
         } else {
-          const errorText = await resendResponse.text();
-          console.warn('⚠️ Resend failed:', resendResponse.status, errorText);
+          console.error('❌ Resend failed:', resendResponse.status, responseText);
+          // Don't return here - try fallback methods
         }
       } catch (resendError) {
-        console.warn('⚠️ Resend error:', resendError.message);
+        console.error('❌ Resend error:', resendError.message);
+        console.error('❌ Resend error stack:', resendError.stack);
+        // Continue to try other methods
       }
+    } else {
+      console.log('⚠️ RESEND_API_KEY not found in environment variables');
     }
 
     // Try SendGrid as fallback
@@ -2303,7 +2355,9 @@ app.post('/api/debug-email', async (req, res) => {
   console.log('  - SMTP_PORT:', process.env.SMTP_PORT);
   console.log('  - SMTP_USER:', process.env.SMTP_USER);
   console.log('  - SMTP_PASS:', process.env.SMTP_PASS ? '(exists)' : '(missing)');
-  console.log('  - RESEND_API_KEY:', process.env.RESEND_API_KEY ? '(exists)' : '(missing)');
+  console.log('  - SMTP_FROM:', process.env.SMTP_FROM);
+  console.log('  - RESEND_API_KEY:', process.env.RESEND_API_KEY ? `(exists, length: ${process.env.RESEND_API_KEY.length})` : '(missing)');
+  console.log('  - RESEND_FROM:', process.env.RESEND_FROM);
   console.log('  - SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? '(exists)' : '(missing)');
   console.log('========================================');
   
@@ -2319,30 +2373,114 @@ app.post('/api/debug-email', async (req, res) => {
       </div>
     `;
     
-    // Call the email integration endpoint
-    const emailResponse = await fetch(`http://localhost:${PORT}/api/integrations/email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to,
-        subject: '🧪 Debug Test Email - Music Space',
-        body: testBody,
-        from_name: 'Music Space Debug'
-      })
-    });
+    // Call the email integration endpoint directly (not via localhost)
+    const emailPayload = {
+      to,
+      subject: '🧪 Debug Test Email - Music Space',
+      body: testBody,
+      from_name: 'Music Space Debug'
+    };
     
-    const result = await emailResponse.json();
-    console.log('📧 Email endpoint response:', JSON.stringify(result, null, 2));
+    console.log('📧 Calling email integration with payload:', JSON.stringify(emailPayload, null, 2));
     
-    res.json({ 
-      success: emailResponse.ok, 
-      emailResult: result,
-      env: {
-        hasSMTP: !!process.env.SMTP_HOST,
-        hasResend: !!process.env.RESEND_API_KEY,
-        hasSendGrid: !!process.env.SENDGRID_API_KEY
+    // Use the same function logic directly instead of calling via HTTP
+    const { to: emailTo, subject: emailSubject, body: emailBody, from_name } = emailPayload;
+    
+    // Try Resend first
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resendApiKey = process.env.RESEND_API_KEY;
+        const resendFrom = process.env.SMTP_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev';
+        
+        console.log('📧 Testing Resend directly...');
+        const resendPayload = {
+          from: resendFrom,
+          to: [emailTo],
+          subject: emailSubject,
+          html: emailBody
+        };
+        
+        console.log('📧 Resend payload:', JSON.stringify(resendPayload, null, 2));
+        
+        const resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(resendPayload)
+        });
+        
+        const responseText = await resendResponse.text();
+        console.log('📧 Resend response status:', resendResponse.status);
+        console.log('📧 Resend response text:', responseText);
+        
+        if (resendResponse.ok) {
+          try {
+            const resendData = JSON.parse(responseText);
+            console.log('✅ Resend test successful:', resendData);
+            return res.json({ 
+              success: true, 
+              method: 'resend',
+              data: resendData,
+              env: {
+                hasSMTP: !!process.env.SMTP_HOST,
+                hasResend: !!process.env.RESEND_API_KEY,
+                hasSendGrid: !!process.env.SENDGRID_API_KEY,
+                resendApiKeyLength: process.env.RESEND_API_KEY?.length || 0
+              }
+            });
+          } catch (parseError) {
+            console.log('✅ Resend test successful (non-JSON response)');
+            return res.json({ 
+              success: true, 
+              method: 'resend',
+              message: responseText,
+              env: {
+                hasSMTP: !!process.env.SMTP_HOST,
+                hasResend: !!process.env.RESEND_API_KEY,
+                hasSendGrid: !!process.env.SENDGRID_API_KEY
+              }
+            });
+          }
+        } else {
+          console.error('❌ Resend test failed:', resendResponse.status, responseText);
+          return res.json({ 
+            success: false, 
+            error: 'Resend failed',
+            status: resendResponse.status,
+            message: responseText,
+            env: {
+              hasSMTP: !!process.env.SMTP_HOST,
+              hasResend: !!process.env.RESEND_API_KEY,
+              hasSendGrid: !!process.env.SENDGRID_API_KEY
+            }
+          });
+        }
+      } catch (resendError) {
+        console.error('❌ Resend test error:', resendError.message);
+        return res.status(500).json({ 
+          error: 'Resend test error', 
+          details: String(resendError),
+          stack: resendError.stack,
+          env: {
+            hasSMTP: !!process.env.SMTP_HOST,
+            hasResend: !!process.env.RESEND_API_KEY,
+            hasSendGrid: !!process.env.SENDGRID_API_KEY
+          }
+        });
       }
-    });
+    } else {
+      return res.json({ 
+        success: false,
+        error: 'RESEND_API_KEY not found in environment variables',
+        env: {
+          hasSMTP: !!process.env.SMTP_HOST,
+          hasResend: false,
+          hasSendGrid: !!process.env.SENDGRID_API_KEY
+        }
+      });
+    }
   } catch (error) {
     console.error('❌ Debug email error:', error);
     res.status(500).json({ 
