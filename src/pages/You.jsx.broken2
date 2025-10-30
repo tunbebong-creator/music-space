@@ -1,0 +1,2233 @@
+
+import React, { useState, useEffect, useRef } from "react";
+import { customAPI } from "@/api/customClient";
+import { Core } from "@/api/integrations";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { User, Music, FileText, Calendar, Heart, Sparkles, Lock, LogOut, Edit2, Save, X, Upload, TrendingUp, Award, Crown, Settings, ArrowRight, CheckCircle, BookOpen, Circle, Search } from "lucide-react";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
+import { format } from "date-fns";
+import ModernAuthModal from "../components/ModernAuthModal";
+
+// Enhanced slider styles with BETTER mobile touch targets
+const sliderStyles = `
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    width: 100%;
+    height: 48px; /* Tăng vùng chạm cho mobile */
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 12px; /* Track cao hơn cho dễ nhìn */
+    border-radius: 9999px;
+    background: transparent; /* Track will be styled by the motion.div below it */
+  }
+
+  input[type="range"]::-moz-range-track {
+    width: 100%;
+    height: 12px;
+    border-radius: 9999px;
+    background: transparent; /* Track will be styled by the motion.div below it */
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 40px; /* Lớn hơn nhiều cho mobile */
+    height: 40px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 20px currentColor;
+    border: 5px solid currentColor;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    margin-top: -14px; /* Center với track */
+  }
+
+  input[type="range"]::-webkit-slider-thumb:active {
+    transform: scale(1.2);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 30px currentColor;
+    cursor: grabbing;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 20px currentColor;
+    border: 5px solid currentColor;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  input[type="range"]::-moz-range-thumb:active {
+    transform: scale(1.2);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 30px currentColor;
+    cursor: grabbing;
+  }
+
+  /* Tăng vùng tương tác cho mobile */
+  @media (max-width: 768px) {
+    input[type="range"] {
+      height: 56px;
+      padding: 8px 0;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      width: 44px;
+      height: 44px;
+      margin-top: -16px;
+    }
+    
+    input[type="range"]::-moz-range-thumb {
+      width: 44px;
+      height: 44px;
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      filter: brightness(1);
+    }
+    50% {
+      filter: brightness(1.3);
+    }
+  }
+`;
+
+export default function You() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [editMode, setEditMode] = useState(false);
+  const [profileData, setProfileData] = useState({ full_name: "", bio: "", avatar_url: "" });
+  const [moodLevel, setMoodLevel] = useState(50);
+  const [prevMoodLevel, setPrevMoodLevel] = useState(50);
+  const [showParticles, setShowParticles] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [roleRequestForm, setRoleRequestForm] = useState({ role_type: "space_owner", reason: "", portfolio_url: "" });
+  const [showModernAuthModal, setShowModernAuthModal] = useState(false);
+  
+  // NEW: Modal states
+  const [showMoodJournalModal, setShowMoodJournalModal] = useState(false);
+  const [journalNote, setJournalNote] = useState("");
+  const [savingJournal, setSavingJournal] = useState(false);
+  const [showRecommendationsModal, setShowRecommendationsModal] = useState(false);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [moodRecommendations, setMoodRecommendations] = useState(null);
+
+  // NEW: Search state for activities
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const queryClient = useQueryClient();
+  const updateMoodTimeout = useRef(null);
+  const navigate = useNavigate(); // Initialize useNavigate
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        // First check localStorage for user data
+        const userData = localStorage.getItem('user_data');
+        const token = localStorage.getItem('auth_token');
+        
+        if (userData && token) {
+          const user = JSON.parse(userData);
+          setUser(user);
+          setProfileData({
+            full_name: user.full_name || "",
+            bio: user.bio || "",
+            avatar_url: user.avatar_url || ""
+          });
+          setLoading(false);
+          return;
+        }
+        
+        // Skip API call if no token to avoid 401 error
+        setUser(null);
+      } catch (error) {
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUser();
+  }, []);
+
+  const { data: activities } = useQuery({
+    queryKey: ['user-activities', user?.id],
+    queryFn: () => customAPI.entities.UserActivity.find({ user_id: user.id }),
+    initialData: [],
+    enabled: !!user,
+  });
+
+  const { data: bookings } = useQuery({
+    queryKey: ['user-bookings', user?.id],
+    queryFn: () => customAPI.entities.Booking.find({ user_id: user.id }),
+    initialData: [],
+    enabled: !!user,
+  });
+
+  const { data: artistBookings } = useQuery({
+    queryKey: ['artist-bookings', user?.id],
+    queryFn: () => customAPI.entities.ArtistBooking.find({ booker_id: user.id }),
+    initialData: [],
+    enabled: !!user,
+  });
+
+  const { data: myRoleRequests } = useQuery({
+    queryKey: ['my-role-requests', user?.id],
+    queryFn: () => customAPI.entities.RoleRequest.find({ user_id: user.id }),
+    initialData: [],
+    enabled: !!user,
+  });
+
+  const { data: allPosts } = useQuery({
+    queryKey: ['all-posts'],
+    queryFn: () => customAPI.entities.BlogPost.find({ published: true }),
+    initialData: [],
+    enabled: !!user,
+  });
+
+  const { data: allSpaces } = useQuery({
+    queryKey: ['all-spaces'],
+    queryFn: () => customAPI.entities.Space.find({ approved: true }),
+    initialData: [],
+    enabled: !!user,
+  });
+
+  const { data: allEvents } = useQuery({
+    queryKey: ['all-events'],
+    queryFn: () => customAPI.entities.Event.find(),
+    initialData: [],
+    enabled: !!user,
+  });
+
+  const { data: moodJournals } = useQuery({
+    queryKey: ['mood-journals', user?.id],
+    queryFn: () => customAPI.entities.MoodJournal.find({ user_id: user.id }),
+    initialData: [],
+    enabled: !!user,
+  });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: (data) => customAPI.auth.updateMe(data),
+    onSuccess: async () => {
+      const updatedUser = await customAPI.auth.me();
+      setUser(updatedUser);
+      setProfileData({
+        full_name: updatedUser.full_name || "",
+        bio: updatedUser.bio || "",
+        avatar_url: updatedUser.avatar_url || ""
+      });
+      setEditMode(false);
+    },
+  });
+
+  const updateMoodMutation = useMutation({
+    mutationFn: async (mood) => {
+      const prefs = await customAPI.entities.UserPreferences.find({ user_id: user.id });
+      if (prefs.length > 0) {
+        return customAPI.entities.UserPreferences.update(prefs[0].id, { mood_level: mood });
+      } else {
+        return customAPI.entities.UserPreferences.create({ user_id: user.id, mood_level: mood });
+      }
+    },
+  });
+
+  const createRoleRequestMutation = useMutation({
+    mutationFn: (data) => customAPI.entities.RoleRequest.create({
+      ...data,
+      user_id: user.id,
+      user_email: user.email,
+      user_name: user.full_name || user.email
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['my-role-requests']);
+      setShowRoleModal(false);
+      setRoleRequestForm({ role_type: "space_owner", reason: "", portfolio_url: "" });
+    },
+  });
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file && user) {
+      setImageUploading(true);
+      try {
+        const { file_url } = await Core.UploadFile({ file });
+        setProfileData(prev => ({ ...prev, avatar_url: file_url }));
+        await updateProfileMutation.mutateAsync({ avatar_url: file_url });
+      } catch (error) {
+        console.error("Error uploading image:", error);
+      } finally {
+        setImageUploading(false);
+      }
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    await updateProfileMutation.mutateAsync(profileData);
+  };
+
+  const handleMoodChange = (value) => {
+    const newValue = parseInt(value);
+    setPrevMoodLevel(moodLevel);
+    setMoodLevel(newValue);
+    
+    // Trigger particle effect on any change (more sensitive)
+    if (Math.abs(newValue - prevMoodLevel) > 5) {
+      setShowParticles(true);
+      setTimeout(() => setShowParticles(false), 600);
+    }
+    
+    // Haptic feedback for mobile on significant changes
+    if (navigator.vibrate && Math.abs(newValue - prevMoodLevel) > 10) {
+      navigator.vibrate(15); // Short vibration
+    }
+    
+    // Debounce API call
+    if (user) {
+      if (updateMoodTimeout.current) {
+        clearTimeout(updateMoodTimeout.current);
+      }
+      updateMoodTimeout.current = setTimeout(() => {
+        updateMoodMutation.mutate(newValue);
+      }, 500);
+    }
+  };
+
+  // Thêm function để set mood nhanh
+  const setQuickMood = (level) => {
+    setPrevMoodLevel(moodLevel);
+    setMoodLevel(level);
+    setShowParticles(true);
+    setTimeout(() => setShowParticles(false), 600);
+    
+    if (navigator.vibrate) {
+      navigator.vibrate(20);
+    }
+    
+    if (user) {
+      if (updateMoodTimeout.current) {
+        clearTimeout(updateMoodTimeout.current);
+      }
+      updateMoodTimeout.current = setTimeout(() => {
+        updateMoodMutation.mutate(level);
+      }, 300);
+    }
+  };
+
+  const getMoodColor = () => {
+    if (moodLevel < 30) return { 
+      bg: "from-blue-400 to-blue-600", 
+      border: "border-blue-500", 
+      text: "text-blue-600",
+      shadow: "shadow-blue-200",
+      glow: "0 0 40px rgba(96, 165, 250, 0.8), 0 0 80px rgba(96, 165, 250, 0.4)", // Stronger blue glow
+      glowStrong: "0 0 60px rgba(96, 165, 250, 1), 0 0 100px rgba(96, 165, 250, 0.6)" // Even stronger for particles
+    };
+    if (moodLevel < 70) return { 
+      bg: "from-green-400 to-green-600", 
+      border: "border-green-500", 
+      text: "text-green-600",
+      shadow: "shadow-green-200",
+      glow: "0 0 40px rgba(52, 211, 153, 0.8), 0 0 80px rgba(52, 211, 153, 0.4)", // Stronger green glow
+      glowStrong: "0 0 60px rgba(52, 211, 153, 1), 0 0 100px rgba(52, 211, 153, 0.6)" // Even stronger
+    };
+    return { 
+      bg: "from-orange-400 to-orange-600", 
+      border: "border-orange-500", 
+      text: "text-orange-600",
+      shadow: "shadow-orange-200",
+      glow: "0 0 40px rgba(251, 146, 60, 0.8), 0 0 80px rgba(251, 146, 60, 0.4)", // Stronger orange glow
+      glowStrong: "0 0 60px rgba(251, 146, 60, 1), 0 0 100px rgba(251, 146, 60, 0.6)" // Even stronger
+    };
+  };
+
+  const getMoodEmoji = () => {
+    if (moodLevel < 30) return "😌";
+    if (moodLevel < 70) return "😊";
+    return "🎉";
+  };
+
+  const getMoodLabel = () => {
+    if (moodLevel < 30) return "Thư giãn";
+    if (moodLevel < 70) return "Vui vẻ";
+    return "Năng động";
+  };
+
+  const getMoodGradient = () => {
+    // This function can be improved for smoother transition, but for now it's okay
+    const moodPercent = moodLevel / 100;
+    let color1, color2;
+
+    if (moodPercent < 0.3) {
+      color1 = "#60A5FA"; // Light Blue
+      color2 = "#3B82F6"; // Darker Blue
+    } else if (moodPercent < 0.7) {
+      // Transition from Blue to Green
+      const mix = (moodPercent - 0.3) / 0.4; // 0 to 1 over the 30-70 range
+      const r = Math.round(96 + (52 - 96) * mix);
+      const g = Math.round(165 + (211 - 165) * mix);
+      const b = Math.round(250 + (153 - 250) * mix);
+      color1 = "#60A5FA"; // Start blue
+      color2 = `rgb(${r}, ${g}, ${b})`; // Mix towards green
+    } else {
+      // Transition from Green to Orange
+      const mix = (moodPercent - 0.7) / 0.3; // 0 to 1 over the 70-100 range
+      const r = Math.round(52 + (251 - 52) * mix);
+      const g = Math.round(211 + (146 - 211) * mix);
+      const b = Math.round(153 + (60 - 153) * mix);
+      color1 = "#34D399"; // Start green
+      color2 = `rgb(${r}, ${g}, ${b})`; // Mix towards orange
+    }
+    
+    return `linear-gradient(to right, ${color1} 0%, ${color2} 100%)`;
+  };
+
+  const saveMoodJournal = async () => {
+    if (!user) return;
+    
+    setSavingJournal(true);
+    setLoadingRecommendations(true);
+
+    try {
+      const moodLabel = getMoodLabel();
+      const moodEmoji = getMoodEmoji();
+      
+      const prompt = `Dựa trên cảm xúc "${moodLabel}" (${moodLevel}/100) ${moodEmoji} và ghi chú: "${journalNote}", đề xuất:
+
+DANH SÁCH BÀI VIẾT:
+${allPosts.map(p => `ID: ${p.id} - ${p.title} (${p.category})`).join('\n')}
+
+DANH SÁCH KHÔNG GIAN:
+${allSpaces.map(s => `ID: ${s.id} - ${s.name} (${s.space_type})`).join('\n')}
+
+DANH SÁCH SỰ KIỆN:
+${allEvents.map(e => `ID: ${e.id} - ${e.title} (${e.category})`).join('\n')}
+
+Chọn 2 items phù hợp NHẤT từ mỗi danh sách. JSON:
+{
+  "analysis": "Phân tích ngắn",
+  "post_ids": ["id1", "id2"],
+  "space_ids": ["id1", "id2"],
+  "event_ids": ["id1", "id2"],
+  "tip": "Lời khuyên"
+}`;
+
+      const aiResponse = await Core.InvokeLLM({
+        prompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            analysis: { type: "string" },
+            post_ids: { type: "array", items: { type: "string" } },
+            space_ids: { type: "array", items: { type: "string" } },
+            event_ids: { type: "array", items: { type: "string" } },
+            tip: { type: "string" }
+          }
+        }
+      });
+
+      await customAPI.entities.MoodJournal.create({
+        user_id: user.id,
+        mood_level: moodLevel,
+        note: journalNote,
+        recommended_posts: aiResponse.post_ids || [],
+        recommended_spaces: aiResponse.space_ids || [],
+        recommended_events: aiResponse.event_ids || []
+      });
+
+      setMoodRecommendations({
+        ...aiResponse,
+        posts: aiResponse.post_ids.map(id => allPosts.find(p => p.id === id)).filter(Boolean),
+        spaces: aiResponse.space_ids.map(id => allSpaces.find(s => s.id === id)).filter(Boolean),
+        events: aiResponse.event_ids.map(id => allEvents.find(e => e.id === id)).filter(Boolean)
+      });
+
+      queryClient.invalidateQueries(['mood-journals']);
+      setShowMoodJournalModal(false);
+      setShowRecommendationsModal(true);
+      setJournalNote("");
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setSavingJournal(false);
+      setLoadingRecommendations(false);
+    }
+  };
+
+  const handleRoleRequest = (e) => {
+    e.preventDefault();
+    createRoleRequestMutation.mutate(roleRequestForm);
+  };
+
+  const tabs = [
+    { id: "overview", label: "Tổng quan", icon: User },
+    { id: "activities", label: "Hoạt động", icon: TrendingUp },
+    { id: "bookings", label: "Đặt chỗ", icon: Calendar },
+    { id: "settings", label: "Cài đặt", icon: Settings }
+  ];
+
+  const subscriptionTiers = {
+    free: { name: "Free", icon: "🎵" },
+    premium: { name: "Premium", icon: "⭐" },
+    pro: { name: "Pro", icon: "👑" }
+  };
+
+  // Get personalized encouragement messages
+  const getEncouragementMessage = () => {
+    const activityCount = activities.length;
+    const bookingCount = bookings.length + artistBookings.length;
+    const points = user?.points || 0;
+    
+    if (activityCount === 0 && bookingCount === 0) {
+      return {
+        title: "Chào mừng bạn đến với Music Space! 🎉",
+        message: "Hành trình âm nhạc của bạn mới bắt đầu. Hãy khám phá những không gian tuyệt vời và tìm kiếm nguồn cảm hứng mới!",
+        action: "Khám phá ngay",
+        link: "Love"
+      };
+    }
+    
+    if (activityCount > 0 && bookingCount === 0) {
+      return {
+        title: "Bạn đang trên con đường khám phá! 📚",
+        message: `Bạn đã đọc ${activityCount} bài viết. Tuyệt vời! Có thể thử trải nghiệm trực tiếp tại các không gian âm nhạc nhé?`,
+        action: "Tìm không gian gần tôi",
+        link: "Love"
+      };
+    }
+    
+    if (bookingCount > 0 && activityCount < 5) {
+      return {
+        title: "Bạn thật dũng cảm khi bước ra ngoài! 🌟",
+        message: `${bookingCount} lần tham gia - bạn đang tạo nên những kỷ niệm đẹp. Hãy chia sẻ trải nghiệm của bạn với cộng đồng nhé!`,
+        action: "Viết câu chuyện",
+        link: "We"
+      };
+    }
+    
+    if (activityCount >= 5 && bookingCount >= 3) {
+      return {
+        title: "Bạn là thành viên tích cực của Music Space! 🎊",
+        message: `${activityCount} bài đọc, ${bookingCount} lần tham gia - bạn đang sống trọn vẹn với âm nhạc. Tiếp tục nhé!`,
+        action: "Xem sự kiện mới",
+        link: "Events"
+      };
+    }
+    
+    return {
+      title: "Hành trình âm nhạc của bạn rất tuyệt vời! ✨",
+      message: "Mỗi bước đi của bạn đều là một nốt nhạc trong bản giao hưởng cuộc đời. Hãy tiếp tục khám phá!",
+      action: "Tiếp tục khám phá",
+      link: "Home"
+    };
+  };
+
+  const encouragement = user ? getEncouragementMessage() : null;
+  
+
+  // Filter activities based on search query
+  const filteredActivities = activities.filter((activity) => {
+    const matchesSearch = searchQuery === "" || 
+      (activity.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (activity.activity_type || '').toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-100 via-blue-200 to-blue-300">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-700 font-medium">Đang tải...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen relative overflow-hidden bg-gradient-to-b from-[#0D47A1] via-[#1E88E5] to-[#42A5F5]">
+        {/* Background particles */}
+        <div className="absolute inset-0">
+          {[...Array(50)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-white/30 rounded-full"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Main content */}
+        <div className="relative z-10 flex items-center justify-center min-h-screen px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="max-w-md w-full"
+          >
+            {/* Title */}
+            <div className="text-center mb-8">
+              <h1 className="text-6xl font-bold text-white mb-4" style={{ fontFamily: 'cursive' }}>
+                You
+              </h1>
+              <p className="text-xl text-white/90">Hành trình âm nhạc của bạn</p>
+            </div>
+
+            {/* Login Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="bg-white rounded-2xl p-8 shadow-2xl"
+            >
+              {/* Icon */}
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <User className="w-8 h-8 text-blue-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">Bắt đầu hành trình</h2>
+                <p className="text-gray-600">Ghi lại tâm trạng, nhận gợi ý AI và kết nối với cộng đồng yêu âm nhạc</p>
+              </div>
+
+              {/* Features */}
+              <div className="space-y-4 mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                    <span className="text-pink-600">📝</span>
+                  </div>
+                  <span className="text-gray-700">Nhật ký tâm trạng cá nhân</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                    <span className="text-orange-600">✨</span>
+                  </div>
+                  <span className="text-gray-700">Gợi ý thông minh từ AI</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <span className="text-red-600">🎯</span>
+                  </div>
+                  <span className="text-gray-700">Theo dõi hoạt động & cộng đồng</span>
+                </div>
+              </div>
+
+              {/* Login Button - Only show if not logged in */}
+              {!user && (
+                <div>
+                  <button
+                    onClick={() => setShowModernAuthModal(true)}
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
+                  >
+                    <div className="flex items-center justify-center gap-3">
+                      <User className="w-6 h-6" />
+                      Đăng nhập để bắt đầu
+                    </div>
+                  </button>
+                </div>
+              )}
+                      modal.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: rgba(0,0,0,0.8);
+                        z-index: 99999;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-family: system-ui, -apple-system, sans-serif;
+                      `;
+                      
+                      modal.innerHTML = `
+                        <div style="
+                          background: white;
+                          border-radius: 20px;
+                          max-width: 500px;
+                          width: 90%;
+                          overflow: hidden;
+                          box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+                        ">
+                          <!-- Header with Gradient -->
+                          <div style="
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            padding: 40px 30px 30px 30px;
+                            position: relative;
+                          ">
+                            <button onclick="document.getElementById('simple-login-modal').remove()" style="
+                              position: absolute;
+                              top: 20px;
+                              right: 20px;
+                              background: rgba(255,255,255,0.2);
+                              border: none;
+                              color: white;
+                              width: 35px;
+                              height: 35px;
+                              border-radius: 50%;
+                              cursor: pointer;
+                              font-size: 20px;
+                              display: flex;
+                              align-items: center;
+                              justify-content: center;
+                            ">×</button>
+                            
+                            <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                              <div style="
+                                width: 40px;
+                                height: 40px;
+                                background: rgba(255,255,255,0.2);
+                                border-radius: 10px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                margin-right: 15px;
+                                font-size: 20px;
+                              ">✨</div>
+                              <div>
+                                <h1 style="margin: 0; font-size: 24px; font-weight: bold;">Chào mừng đến với Music Space</h1>
+                                <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">Music Space</p>
+                              </div>
+                            </div>
+                            
+                            <p style="margin: 0; font-size: 14px; opacity: 0.8;">
+                              Đăng nhập để khám phá thế giới âm nhạc và không gian sáng tạo
+                            </p>
+                          </div>
+                          
+                          <!-- Tabs -->
+                          <div style="
+                            display: flex;
+                            background: #f8f9fa;
+                            border-bottom: 1px solid #e9ecef;
+                          ">
+                            <button id="login-tab" onclick="switchToLogin()" style="
+                              flex: 1;
+                              padding: 15px;
+                              border: none;
+                              background: white;
+                              color: #667eea;
+                              font-weight: 600;
+                              cursor: pointer;
+                              border-radius: 0;
+                              box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+                            ">Đăng nhập</button>
+                            <button id="register-tab" onclick="switchToRegister()" style="
+                              flex: 1;
+                              padding: 15px;
+                              border: none;
+                              background: transparent;
+                              color: #6c757d;
+                              font-weight: 500;
+                              cursor: pointer;
+                              border-radius: 0;
+                            ">Đăng ký</button>
+                          </div>
+                          
+                          <!-- Form Content -->
+                          <div style="padding: 30px;">
+                            <!-- Login Form -->
+                            <form id="simple-login-form">
+                              <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Email</label>
+                                <div style="position: relative;">
+                                  <input type="email" id="simple-email" required placeholder="your@email.com" style="
+                                    width: 100%;
+                                    padding: 15px 15px 15px 45px;
+                                    border: 1px solid #e1e5e9;
+                                    border-radius: 8px;
+                                    font-size: 16px;
+                                    box-sizing: border-box;
+                                    transition: border-color 0.3s;
+                                  " onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e1e5e9'">
+                                  <div style="
+                                    position: absolute;
+                                    left: 15px;
+                                    top: 50%;
+                                    transform: translateY(-50%);
+                                    color: #6c757d;
+                                    font-size: 16px;
+                                  ">✉</div>
+                                </div>
+                              </div>
+                              
+                              <div style="margin-bottom: 30px;">
+                                <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Mật khẩu</label>
+                                <div style="position: relative;">
+                                  <input type="password" id="simple-password" required placeholder="••••••••" style="
+                                    width: 100%;
+                                    padding: 15px 15px 15px 45px;
+                                    border: 1px solid #e1e5e9;
+                                    border-radius: 8px;
+                                    font-size: 16px;
+                                    box-sizing: border-box;
+                                    transition: border-color 0.3s;
+                                  " onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e1e5e9'">
+                                  <div style="
+                                    position: absolute;
+                                    left: 15px;
+                                    top: 50%;
+                                    transform: translateY(-50%);
+                                    color: #6c757d;
+                                    font-size: 16px;
+                                  ">🔒</div>
+                                </div>
+                              </div>
+                              
+                              <button type="submit" style="
+                                width: 100%;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                padding: 15px;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: transform 0.2s;
+                              " onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">
+                                Đăng nhập
+                              </button>
+                            </form>
+                            
+                            <!-- Register Form (Hidden by default) -->
+                            <form id="simple-register-form" style="display: none;">
+                              <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Họ và tên</label>
+                                <input type="text" id="simple-fullname" required placeholder="Nhập họ và tên" style="
+                                  width: 100%;
+                                  padding: 15px;
+                                  border: 1px solid #e1e5e9;
+                                  border-radius: 8px;
+                                  font-size: 16px;
+                                  box-sizing: border-box;
+                                  transition: border-color 0.3s;
+                                " onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e1e5e9'">
+                              </div>
+                              
+                              <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Email</label>
+                                <div style="position: relative;">
+                                  <input type="email" id="simple-register-email" required placeholder="your@email.com" style="
+                                    width: 100%;
+                                    padding: 15px 15px 15px 45px;
+                                    border: 1px solid #e1e5e9;
+                                    border-radius: 8px;
+                                    font-size: 16px;
+                                    box-sizing: border-box;
+                                    transition: border-color 0.3s;
+                                  " onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e1e5e9'">
+                                  <div style="
+                                    position: absolute;
+                                    left: 15px;
+                                    top: 50%;
+                                    transform: translateY(-50%);
+                                    color: #6c757d;
+                                    font-size: 16px;
+                                  ">✉</div>
+                                </div>
+                              </div>
+                              
+                              <div style="margin-bottom: 30px;">
+                                <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Mật khẩu</label>
+                                <div style="position: relative;">
+                                  <input type="password" id="simple-register-password" required placeholder="••••••••" style="
+                                    width: 100%;
+                                    padding: 15px 15px 15px 45px;
+                                    border: 1px solid #e1e5e9;
+                                    border-radius: 8px;
+                                    font-size: 16px;
+                                    box-sizing: border-box;
+                                    transition: border-color 0.3s;
+                                  " onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e1e5e9'">
+                                  <div style="
+                                    position: absolute;
+                                    left: 15px;
+                                    top: 50%;
+                                    transform: translateY(-50%);
+                                    color: #6c757d;
+                                    font-size: 16px;
+                                  ">🔒</div>
+                                </div>
+                              </div>
+                              
+                              <button type="submit" style="
+                                width: 100%;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                padding: 15px;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: transform 0.2s;
+                              " onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">
+                                Đăng ký
+                              </button>
+                            </form>
+                          </div>
+                          
+                          <!-- Footer -->
+                          <div style="
+                            padding: 20px 30px;
+                            background: #f8f9fa;
+                            text-align: center;
+                            font-size: 14px;
+                            color: #6c757d;
+                            border-top: 1px solid #e9ecef;
+                          ">
+                            Miễn phí mãi mãi • Không cần thẻ tín dụng
+                          </div>
+                        </div>
+                      `;
+                      
+                      // Add tab switching functions
+                      window.switchToLogin = function() {
+                        document.getElementById('login-tab').style.background = 'white';
+                        document.getElementById('login-tab').style.color = '#667eea';
+                        document.getElementById('login-tab').style.fontWeight = '600';
+                        document.getElementById('login-tab').style.boxShadow = '0 -2px 4px rgba(0,0,0,0.1)';
+                        
+                        document.getElementById('register-tab').style.background = 'transparent';
+                        document.getElementById('register-tab').style.color = '#6c757d';
+                        document.getElementById('register-tab').style.fontWeight = '500';
+                        document.getElementById('register-tab').style.boxShadow = 'none';
+                        
+                        document.getElementById('simple-login-form').style.display = 'block';
+                        document.getElementById('simple-register-form').style.display = 'none';
+                      };
+                      
+                      window.switchToRegister = function() {
+                        document.getElementById('register-tab').style.background = 'white';
+                        document.getElementById('register-tab').style.color = '#667eea';
+                        document.getElementById('register-tab').style.fontWeight = '600';
+                        document.getElementById('register-tab').style.boxShadow = '0 -2px 4px rgba(0,0,0,0.1)';
+                        
+                        document.getElementById('login-tab').style.background = 'transparent';
+                        document.getElementById('login-tab').style.color = '#6c757d';
+                        document.getElementById('login-tab').style.fontWeight = '500';
+                        document.getElementById('login-tab').style.boxShadow = 'none';
+                        
+                        document.getElementById('simple-register-form').style.display = 'block';
+                        document.getElementById('simple-login-form').style.display = 'none';
+                      };
+                      
+                      // Add login form handler
+                      modal.querySelector('#simple-login-form').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const email = document.getElementById('simple-email').value;
+                        const password = document.getElementById('simple-password').value;
+                        
+                        try {
+                          const response = await fetch('http://localhost:3001/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password })
+                          });
+                          
+                          const data = await response.json();
+                          
+                          if (response.ok) {
+                            localStorage.setItem('auth_token', data.token);
+                            localStorage.setItem('user_data', JSON.stringify(data.user));
+                            alert('🎉 Đăng nhập thành công! Chào mừng ' + (data.user.full_name || data.user.email));
+                            document.getElementById('simple-login-modal').remove();
+                            window.location.reload();
+                          } else {
+                            alert('❌ Lỗi: ' + (data.error || 'Đăng nhập thất bại'));
+                          }
+                        } catch (error) {
+                          alert('❌ Lỗi kết nối: ' + error.message);
+                        }
+                      });
+                      
+                      // Add register form handler
+                      modal.querySelector('#simple-register-form').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const fullname = document.getElementById('simple-fullname').value;
+                        const email = document.getElementById('simple-register-email').value;
+                        const password = document.getElementById('simple-register-password').value;
+                        
+                        try {
+                          const response = await fetch('http://localhost:3001/api/auth/register', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                              email, 
+                              password, 
+                              full_name: fullname,
+                              bio: '' 
+                            })
+                          });
+                          
+                          const data = await response.json();
+                          
+                          if (response.ok) {
+                            localStorage.setItem('auth_token', data.token);
+                            localStorage.setItem('user_data', JSON.stringify(data.user));
+                            alert('🎉 Đăng ký thành công! Chào mừng ' + (data.user.full_name || data.user.email));
+                            document.getElementById('simple-login-modal').remove();
+                            window.location.reload();
+                          } else {
+                            alert('❌ Lỗi: ' + (data.error || 'Đăng ký thất bại'));
+                          }
+                        } catch (error) {
+                          alert('❌ Lỗi kết nối: ' + error.message);
+                        }
+                      });
+                      
+                      document.body.appendChild(modal);
+                    }}
+                    className="w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg"
+                  >
+                    Đăng nhập
+                  </button>
+                </div>
+              )}
+              
+
+              <p className="text-center text-sm text-gray-500 mt-4">
+                Miễn phí • An toàn • 500+ thành viên
+              </p>
+            </motion.div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  const moodColors = getMoodColor();
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white py-20 px-4">
+      <style>{sliderStyles}</style>
+      <div className="max-w-6xl mx-auto">
+        {/* Profile Header - COMPACT */}
+        <section className="max-w-6xl mx-auto mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white p-6 md:p-8 rounded-3xl border-2 border-gray-100"
+          >
+            <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
+              {/* Avatar */}
+              <div className="relative group flex-shrink-0">
+                <motion.div 
+                  animate={{ 
+                    boxShadow: showParticles 
+                      ? `0 0 80px ${moodColors.glowStrong}, ${moodColors.glowStrong}` 
+                      : `0 10px 30px rgba(0,0,0,0.15), ${moodColors.glow}`,
+                    scale: showParticles ? [1, 1.05, 1] : 1
+                  }}
+                  transition={{ duration: 0.3 }}
+                  className={`w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-gradient-to-br ${getMoodColor().bg} flex items-center justify-center text-white text-4xl md:text-5xl overflow-hidden shadow-lg will-change-transform`}
+                >
+                  {imageUploading ? (
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+                  ) : profileData.avatar_url ? (
+                    <img src={profileData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    user?.full_name ? user.full_name[0].toUpperCase() : user?.email[0].toUpperCase()
+                  )}
+                </motion.div>
+                
+                {/* Particles */}
+                {showParticles && (
+                  <div className="absolute inset-0 pointer-events-none z-20">
+                    {[...Array(8)].map((_, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ 
+                          opacity: 1, 
+                          scale: 0,
+                          x: "50%",
+                          y: "50%"
+                        }}
+                        animate={{ 
+                          opacity: 0, 
+                          scale: 2,
+                          x: `${50 + Math.cos(i * 30 * Math.PI / 180) * 150}%`,
+                          y: `${50 + Math.sin(i * 30 * Math.PI / 180) * 150}%`
+                        }}
+                        transition={{ duration: 0.6, ease: "easeOut" }}
+                        className={`absolute w-2 h-2 md:w-3 md:h-3 rounded-full bg-gradient-to-br ${moodColors.bg}`}
+                        style={{
+                          left: '50%',
+                          top: '50%',
+                          filter: 'blur(1px)'
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {editMode && !imageUploading && (
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <Upload className="w-8 h-8 text-white" />
+                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  </label>
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                {editMode ? (
+                  <>
+                    <input
+                      type="text"
+                      value={profileData.full_name}
+                      onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
+                      className="text-2xl md:text-3xl font-bold bg-gray-50 rounded-xl px-3 py-2 w-full mb-2 text-gray-800 border border-gray-200 focus:border-blue-500 focus:outline-none"
+                      placeholder="Tên của bạn"
+                    />
+                    <textarea
+                      value={profileData.bio}
+                      onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
+                      className="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm md:text-base text-gray-800 border border-gray-200 focus:border-blue-500 focus:outline-none"
+                      rows={2}
+                      placeholder="Chia sẻ về bạn..."
+                    />
+                  </>
+                ) : (
+                  <>
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800">{user?.full_name || "Người dùng"}</h1>
+                    <p className="text-sm text-gray-600">{user?.email}</p>
+                    {user?.bio && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{user.bio}</p>}
+                  </>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 flex-shrink-0 mt-2 md:mt-0">
+                {editMode ? (
+                  <>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={handleSaveProfile}
+                      disabled={updateProfileMutation.isPending}
+                      className="p-3 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-md touch-manipulation"
+                    >
+                      {updateProfileMutation.isPending ? <div className="animate-spin h-5 w-5 border-b-2 border-white rounded-full"></div> : <Save className="w-5 h-5" />}
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        setEditMode(false);
+                        setProfileData({
+                          full_name: user.full_name || "",
+                          bio: user.bio || "",
+                          avatar_url: user.avatar_url || ""
+                        });
+                      }}
+                      className="p-3 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors shadow-md touch-manipulation"
+                    >
+                      <X className="w-5 h-5" />
+                    </motion.button>
+                  </>
+                ) : (
+                  <>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setEditMode(true)}
+                      className="p-3 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors shadow-md touch-manipulation"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => customAPI.auth.logout()}
+                      className="p-3 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors shadow-md touch-manipulation"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </motion.button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Badges */}
+            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+              {user?.artist_verified && (
+                <span className="px-3 py-1.5 rounded-full bg-purple-100 text-purple-700 text-xs md:text-sm font-medium">
+                  🎤 Nghệ sĩ
+                </span>
+              )}
+              {user?.space_owner_verified && (
+                <span className="px-3 py-1.5 rounded-full bg-teal-100 text-teal-700 text-xs md:text-sm font-medium">
+                  🏠 Chủ không gian
+                </span>
+              )}
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Mood Slider - COMPACT */}
+        <section className="max-w-6xl mx-auto mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ 
+              opacity: 1, 
+              y: 0,
+              boxShadow: showParticles 
+                ? `0 20px 60px rgba(0,0,0,0.15), ${moodColors.glowStrong}` 
+                : `0 10px 40px rgba(0,0,0,0.1), ${moodColors.glow}`
+            }}
+            transition={{ duration: 0.2 }}
+            className="bg-white p-6 rounded-3xl border-2 border-gray-100 will-change-transform"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <motion.span 
+                  className="text-3xl md:text-4xl"
+                  key={getMoodEmoji()}
+                  initial={{ scale: 0.8, rotate: -10 }}
+                  animate={{ 
+                    scale: showParticles ? [1, 1.3, 1] : 1,
+                    rotate: 0
+                  }}
+                  transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                >
+                  {getMoodEmoji()}
+                </motion.span>
+                <div>
+                  <h3 className="font-bold text-gray-800 text-lg md:text-xl">Tâm trạng hôm nay</h3>
+                  <span className={`text-sm md:text-base font-medium ${getMoodColor().text}`}>{getMoodLabel()}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMoodJournalModal(true)}
+                className="px-4 md:px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium hover:shadow-lg transition-all flex items-center gap-2 touch-manipulation"
+              >
+                <BookOpen className="w-4 h-4" />
+                Viết nhật ký
+              </button>
+            </div>
+
+            {/* Quick Mood Buttons */}
+            <div className="grid grid-cols-3 gap-2 md:gap-3 mb-4">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setQuickMood(15)}
+                className={`py-3 md:py-4 px-3 md:px-4 rounded-xl font-medium text-sm md:text-base transition-all touch-manipulation ${
+                  moodLevel < 30 
+                    ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg' 
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-300'
+                }`}
+              >
+                <div className="text-2xl md:text-3xl mb-1">😌</div>
+                <div className="text-xs md:text-sm">Thư giãn</div>
+              </motion.button>
+              
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setQuickMood(50)}
+                className={`py-3 md:py-4 px-3 md:px-4 rounded-xl font-medium text-sm md:text-base transition-all touch-manipulation ${
+                  moodLevel >= 30 && moodLevel < 70
+                    ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg' 
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-green-300'
+                }`}
+              >
+                <div className="text-2xl md:text-3xl mb-1">😊</div>
+                <div className="text-xs md:text-sm">Vui vẻ</div>
+              </motion.button>
+              
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setQuickMood(85)}
+                className={`py-3 md:py-4 px-3 md:px-4 rounded-xl font-medium text-sm md:text-base transition-all touch-manipulation ${
+                  moodLevel >= 70
+                    ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg' 
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-orange-300'
+                }`}
+              >
+                <div className="text-2xl md:text-3xl mb-1">🎉</div>
+                <div className="text-xs md:text-sm">Năng động</div>
+              </motion.button>
+            </div>
+
+            {/* Slider */}
+            <div className="relative px-1">
+              {/* Glow background */}
+              <motion.div 
+                className="absolute inset-0 rounded-full opacity-20 pointer-events-none blur-xl"
+                animate={{
+                  background: getMoodGradient(),
+                  opacity: showParticles ? 0.4 : 0.2
+                }}
+                transition={{ duration: 0.2 }}
+              />
+              
+              {/* Particles when dragging */}
+              {showParticles && (
+                <div className="absolute inset-0 pointer-events-none z-20 overflow-visible">
+                  {[...Array(8)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ 
+                        opacity: 1, 
+                        scale: 0,
+                        x: `${(moodLevel / 100) * 100}%`,
+                        y: "50%"
+                      }}
+                      animate={{ 
+                        opacity: 0, 
+                        scale: 1.5,
+                        x: `${(moodLevel / 100) * 100}%`, // Stay around the thumb x-position
+                        y: `${50 + Math.sin(i * 45 * Math.PI / 180) * 100}%` // spread vertically
+                      }}
+                      transition={{ duration: 0.6, ease: "easeOut" }}
+                      className={`absolute w-2 h-2 rounded-full bg-gradient-to-br ${moodColors.bg}`}
+                      style={{
+                        left: 0,
+                        top: '50%',
+                        filter: 'blur(1px)'
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              
+              <motion.input
+                type="range"
+                min="0"
+                max="100"
+                value={moodLevel}
+                onChange={(e) => handleMoodChange(e.target.value)}
+                animate={{
+                  filter: showParticles ? 'brightness(1.2)' : 'brightness(1)'
+                }}
+                className="w-full appearance-none cursor-pointer relative z-10 bg-transparent touch-manipulation"
+                style={{
+                  background: getMoodGradient(),
+                  borderRadius: '9999px',
+                  boxShadow: showParticles ? moodColors.glowStrong : '0 2px 8px rgba(0,0,0,0.1)',
+                  willChange: 'background, box-shadow'
+                }}
+              />
+            </div>
+
+            {/* Value indicator */}
+            <div className="text-center mt-3">
+              <span className="text-2xl md:text-3xl font-bold text-gray-800">{moodLevel}</span>
+              <span className="text-sm text-gray-500 ml-1">/100</span>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Role Status - COMPACT */}
+        <section className="max-w-6xl mx-auto mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white p-6 rounded-3xl border-2 border-gray-100"
+          >
+            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Crown className="w-5 h-5 text-gray-700" />
+              Vai trò & Quyền hạn
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+              {/* Space Owner */}
+              <div className={`p-4 rounded-xl border-2 ${user?.space_owner_verified ? 'border-teal-300 bg-teal-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-sm md:text-base text-gray-800">🏠 Space Owner</h3>
+                  {user?.space_owner_verified && (
+                    <span className="px-2 py-0.5 rounded-full bg-teal-600 text-white text-xs">Đã xác thực</span>
+                  )}
+                </div>
+                {user?.space_owner_verified ? (
+                  <Link to={createPageUrl("SpaceDashboard")}>
+                    <button className="w-full px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 text-sm font-medium">Dashboard</button>
+                  </Link>
+                ) : (
+                  <>
+                    {myRoleRequests.find(r => r.role_type === 'space_owner' && r.status === 'pending') ? (
+                      <div className="text-center py-2 px-3 rounded-lg bg-yellow-100 text-yellow-800 text-sm">
+                        ⏳ Đang chờ duyệt
+                      </div>
+                    ) : (
+                      <button onClick={() => { setRoleRequestForm({ ...roleRequestForm, role_type: "space_owner" }); setShowRoleModal(true); }} className="w-full px-4 py-2 rounded-lg border-2 border-teal-600 text-teal-700 hover:bg-teal-50 text-sm font-medium">Đăng ký</button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Artist */}
+              <div className={`p-4 rounded-xl border-2 ${user?.artist_verified ? 'border-pink-300 bg-pink-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-sm md:text-base text-gray-800">🎤 Artist</h3>
+                  {user?.artist_verified && (
+                    <span className="px-2 py-0.5 rounded-full bg-pink-600 text-white text-xs">Đã xác thực</span>
+                  )}
+                </div>
+                {user?.artist_verified ? (
+                  <Link to={createPageUrl("ArtistDashboard")}>
+                    <button className="w-full px-4 py-2 rounded-lg bg-pink-600 text-white hover:bg-pink-700 text-sm font-medium">Dashboard</button>
+                  </Link>
+                ) : (
+                  <>
+                    {myRoleRequests.find(r => r.role_type === 'artist' && r.status === 'pending') ? (
+                      <div className="text-center py-2 px-3 rounded-lg bg-yellow-100 text-yellow-800 text-sm">
+                        ⏳ Đang chờ duyệt
+                      </div>
+                    ) : (
+                      <button onClick={() => { setRoleRequestForm({ ...roleRequestForm, role_type: "artist" }); setShowRoleModal(true); }} className="w-full px-4 py-2 rounded-lg border-2 border-pink-600 text-pink-700 hover:bg-pink-50 text-sm font-medium">Đăng ký</button>
+                    )}
+                  </>
+                )}
+              </div>
+
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Tabs */}
+        <section className="max-w-6xl mx-auto">
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2 custom-scrollbar"> {/* Added custom-scrollbar for better UX */}
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-5 md:px-6 py-2 md:py-3 rounded-xl font-medium transition-all whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === tab.id
+                    ? 'bg-slate-800 text-white shadow-lg'
+                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <tab.icon className="w-5 h-5" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content - MOBILE OPTIMIZED */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {activeTab === "overview" && (
+                <div className="space-y-6">
+                  {/* Quick Stats Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-2xl p-4 md:p-6 border border-slate-200">
+                      <FileText className="w-8 h-8 text-blue-600 mb-2" />
+                      <p className="text-2xl md:text-3xl font-bold text-slate-800">{activities.filter(a => a.activity_type === "blog_read").length}</p>
+                      <p className="text-sm text-gray-600">Bài đọc</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 md:p-6 border border-slate-200">
+                      <Calendar className="w-8 h-8 text-green-600 mb-2" />
+                      <p className="text-2xl md:text-3xl font-bold text-slate-800">{bookings.length + artistBookings.length}</p>
+                      <p className="text-sm text-gray-600">Tham gia</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 md:p-6 border border-slate-200">
+                      <Award className="w-8 h-8 text-amber-600 mb-2" />
+                      <p className="text-2xl md:text-3xl font-bold text-slate-800">{user?.points || 0}</p>
+                      <p className="text-sm text-gray-600">Điểm</p>
+                    </div>
+                  </div>
+
+                  {/* Personalized Encouragement Card */}
+                  {encouragement && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-gradient-to-br from-slate-50 to-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm"
+                    >
+                      <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
+                        <div className="flex-shrink-0">
+                          <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-2xl md:text-3xl shadow-lg">
+                            {encouragement.title.includes('🎉') ? '🎉' :
+                            encouragement.title.includes('📚') ? '📚' :
+                            encouragement.title.includes('🌟') ? '🌟' :
+                            encouragement.title.includes('🎊') ? '🎊' : '✨'}
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-xl md:text-2xl font-serif font-semibold text-slate-800 mb-2 md:mb-3">
+                            {encouragement.title}
+                          </h3>
+                          <p className="text-base md:text-lg text-slate-600 leading-relaxed mb-4 md:mb-6">
+                            {encouragement.message}
+                          </p>
+                          <Link to={createPageUrl(encouragement.link)}>
+                            <button className="px-5 py-2.5 md:px-6 md:py-3 bg-slate-800 text-white rounded-xl font-medium hover:bg-slate-900 transition-all shadow-md hover:shadow-lg flex items-center gap-2">
+                              {encouragement.action}
+                              <ArrowRight className="w-5 h-5" />
+                            </button>
+                          </Link>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Mood Journal History */}
+                  {moodJournals.length > 0 && (
+                    <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100">
+                      <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <BookOpen className="w-5 h-5 text-purple-600" />
+                        Lịch sử nhật ký tâm trạng
+                      </h3>
+                      <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto custom-scrollbar">
+                        {moodJournals.map((journal) => {
+                          const journalMoodColor = journal.mood_level < 30 ? "bg-blue-100 text-blue-700" :
+                                                journal.mood_level < 70 ? "bg-green-100 text-green-700" :
+                                                "bg-orange-100 text-orange-700";
+                          const journalEmoji = journal.mood_level < 30 ? "😌" :
+                                            journal.mood_level < 70 ? "😊" : "🎉";
+                          
+                          return (
+                            <motion.div
+                              key={journal.id}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              className="p-4 rounded-2xl bg-gradient-to-br from-gray-50 to-white border border-gray-100 hover:shadow-md transition-all"
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                  <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${journalMoodColor}`}>
+                                    {journalEmoji} {journal.mood_level}/100
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {format(new Date(journal.created_date), "dd MMM, HH:mm", { locale: vi })}
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              {journal.note && (
+                                <p className="text-sm text-gray-700 mb-3 leading-relaxed">
+                                  "{journal.note}"
+                                </p>
+                              )}
+
+                              {/* Quick Links to Recommendations */}
+                              <div className="flex flex-wrap gap-2">
+                                {journal.recommended_posts?.slice(0, 2).map(postId => {
+                                  const post = allPosts.find(p => p.id === postId);
+                                  return post && (
+                                    <Link
+                                      key={postId}
+                                      to={createPageUrl(`We/article/${post.id}`)}
+                                      className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                    >
+                                      <FileText className="w-3 h-3" />
+                                      {post.title.slice(0, 20)}...
+                                    </Link>
+                                  );
+                                })}
+                                {journal.recommended_spaces?.slice(0, 1).map(spaceId => {
+                                  const space = allSpaces.find(s => s.id === spaceId);
+                                  return space && (
+                                    <Link
+                                      key={spaceId}
+                                      to={createPageUrl(`Love/space/${space.id}`)}
+                                      className="px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-xs font-medium hover:bg-green-100 transition-colors flex items-center gap-1"
+                                    >
+                                      <Heart className="w-3 h-3" />
+                                      {space.name.slice(0, 15)}...
+                                    </Link>
+                                  );
+                                })}
+                                {journal.recommended_events?.slice(0, 1).map(eventId => {
+                                  const event = allEvents.find(e => e.id === eventId);
+                                  return event && (
+                                    <Link
+                                      key={eventId}
+                                      to={createPageUrl(`Events/event/${event.id}`)}
+                                      className="px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 text-xs font-medium hover:bg-orange-100 transition-colors flex items-center gap-1"
+                                    >
+                                      <Calendar className="w-3 h-3" />
+                                      {event.title.slice(0, 15)}...
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {activeTab === "activities" && (
+                <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200">
+                  <h3 className="text-xl font-bold text-gray-800 mb-4">
+                    Hoạt động gần đây
+                  </h3>
+                  
+                  {/* Search Input */}
+                  <div className="relative mb-6">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm hoạt động..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 text-gray-700"
+                    />
+                  </div>
+
+                  {filteredActivities.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      Không tìm thấy hoạt động nào phù hợp.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                      {filteredActivities.slice(0, 10).map((activity) => (
+                        <div key={activity.id} className="flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl hover:bg-gray-50 transition-colors border border-gray-100">
+                          <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br ${moodColors.bg} flex items-center justify-center flex-shrink-0 shadow-md`}>
+                            {activity.activity_type === "music_listened" && <Music className="w-5 h-5 md:w-6 md:h-6 text-white" />}
+                            {activity.activity_type === "blog_read" && <FileText className="w-5 h-5 md:w-6 md:h-6 text-white" />}
+                            {activity.activity_type === "event_attended" && <Calendar className="w-5 h-5 md:w-6 md:h-6 text-white" />}
+                            {/* Add other activity types here if needed */}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-gray-800 text-sm md:text-base truncate">{activity.title}</h4>
+                            <p className="text-xs md:text-sm text-gray-500">
+                              {format(new Date(activity.created_date), "dd MMM, HH:mm", { locale: vi })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "bookings" && (
+                <div className="space-y-4">
+                  {(bookings.length + artistBookings.length) === 0 ? (
+                    <div className="bg-white p-12 text-center rounded-2xl border border-slate-200">
+                      <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">
+                        Chưa có đặt chỗ
+                      </h3>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                      {bookings.map((booking) => (
+                        <motion.div
+                          key={booking.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ 
+                            opacity: 1, 
+                            y: 0,
+                            boxShadow: `0 8px 30px rgba(0,0,0,0.06), 0 0 15px ${moodColors.glow}`
+                          }}
+                          className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200"
+                        >
+                          <div className="flex items-start gap-3 md:gap-4">
+                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br ${moodColors.bg} flex items-center justify-center flex-shrink-0 shadow-md`}>
+                              <Calendar className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between mb-2">
+                                <h3 className="font-bold text-gray-800 text-sm md:text-base">Đặt chỗ tại Space</h3>
+                                <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                                  booking.status === "confirmed" ? "bg-green-100 text-green-700" :
+                                  booking.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                                  "bg-red-100 text-red-700"
+                                }`}>
+                                  {booking.status === "confirmed" ? "Xác nhận" :
+                                   booking.status === "pending" ? "Chờ" :
+                                   "Hủy"}
+                                </span>
+                              </div>
+                              <div className="space-y-1 text-xs md:text-sm text-gray-600">
+                                <p className="truncate">📅 {format(new Date(booking.date), "dd MMMM, yyyy", { locale: vi })}</p>
+                                <p>⏰ {booking.time}</p>
+                                <p>👥 {booking.guests} người</p>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "settings" && (
+                <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200">
+                  <h3 className="text-xl font-bold text-gray-800 mb-6">
+                    Cài đặt tài khoản
+                  </h3>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Gói đăng ký
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">
+                          {subscriptionTiers[user.subscription_tier || 'free'].icon}
+                        </span>
+                        <span className="text-lg font-semibold text-gray-800">
+                          {subscriptionTiers[user.subscription_tier || 'free'].name}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-6 border-t border-gray-200">
+                      <button className="text-red-600 hover:text-red-700 font-medium">
+                        Xóa tài khoản
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </section>
+
+    
+
+        {/* Mood Journal Modal */}
+        <AnimatePresence>
+          {showMoodJournalModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setShowMoodJournalModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.9 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-3xl max-w-2xl w-full p-8"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800">📝 Nhật ký tâm trạng</h2>
+                  <button onClick={() => setShowMoodJournalModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="mb-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-4xl">{getMoodEmoji()}</span>
+                    <div>
+                      <p className="font-bold text-lg text-gray-800">{getMoodLabel()}</p>
+                      <p className="text-sm text-gray-600">{moodLevel}/100</p>
+                    </div>
+                  </div>
+                  
+                  <textarea
+                    value={journalNote}
+                    onChange={(e) => setJournalNote(e.target.value)}
+                    placeholder={`Hôm nay bạn cảm thấy ${getMoodLabel().toLowerCase()}... Hãy viết ra suy nghĩ của bạn`}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:border-purple-500 min-h-[150px] text-gray-800"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button" // Added type button to prevent form submission
+                    onClick={() => setShowMoodJournalModal(false)}
+                    className="flex-1 px-6 py-3 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button" // Added type button
+                    onClick={saveMoodJournal}
+                    disabled={savingJournal}
+                    className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {savingJournal ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Đang lưu...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Lưu & Nhận gợi ý
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Recommendations Modal */}
+        <AnimatePresence>
+          {showRecommendationsModal && moodRecommendations && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+              onClick={() => setShowRecommendationsModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.9 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-3xl max-w-4xl w-full p-8 my-8"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <Sparkles className="w-6 h-6 text-purple-600" />
+                    Đề xuất cho bạn
+                  </h2>
+                  <button onClick={() => setShowRecommendationsModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Analysis */}
+                <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-100 mb-6">
+                  <p className="text-gray-700 leading-relaxed">💭 {moodRecommendations.analysis}</p>
+                </div>
+
+                {/* Recommendations - 2 ROWS ON MOBILE */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                  {/* Posts */}
+                  <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200">
+                    <h3 className="font-semibold text-sm md:text-base mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      Bài viết
+                    </h3>
+                    <ul className="space-y-2">
+                      {moodRecommendations.posts?.map((post) => (
+                        <li key={post.id}>
+                          <Link to={createPageUrl(`We/article/${post.id}`)} className="flex items-start gap-2 p-2 rounded-lg hover:bg-blue-100 group">
+                            <span className="text-blue-500 mt-1">•</span>
+                            <span className="text-xs md:text-sm text-gray-700 group-hover:text-blue-600 line-clamp-2">{post.title}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Spaces */}
+                  <div className="p-4 rounded-2xl bg-green-50 border border-green-200">
+                    <h3 className="font-semibold text-sm md:text-base mb-3 flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-green-600" />
+                      Không gian
+                    </h3>
+                    <ul className="space-y-2">
+                      {moodRecommendations.spaces?.map((space) => (
+                        <li key={space.id}>
+                          <Link to={createPageUrl(`Love/space/${space.id}`)} className="flex items-start gap-2 p-2 rounded-lg hover:bg-green-100 group">
+                            <span className="text-green-500 mt-1">•</span>
+                            <span className="text-xs md:text-sm text-gray-700 group-hover:text-green-600 line-clamp-2">{space.name}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Events */}
+                  <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 col-span-2 md:col-span-1">
+                    <h3 className="font-semibold text-sm md:text-base mb-3 flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-orange-600" />
+                      Sự kiện
+                    </h3>
+                    <ul className="space-y-2">
+                      {moodRecommendations.events?.map((event) => (
+                        <li key={event.id}>
+                          <Link to={createPageUrl(`Events/event/${event.id}`)} className="flex items-start gap-2 p-2 rounded-lg hover:bg-orange-100 group">
+                            <span className="text-orange-500 mt-1">•</span>
+                            <span className="text-xs md:text-sm text-gray-700 group-hover:text-orange-600 line-clamp-2">{event.title}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Tip */}
+                <div className="p-6 rounded-2xl bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200">
+                  <p className="text-gray-700 leading-relaxed">💡 <strong>Tip:</strong> {moodRecommendations.tip}</p>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Role Request Modal */}
+        <AnimatePresence>
+          {showRoleModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setShowRoleModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.9 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-3xl max-w-lg w-full p-8"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    Đăng ký làm {roleRequestForm.role_type === 'space_owner' ? '🏠 Space Owner' : '🎤 Artist'}
+                  </h2>
+                  <button onClick={() => setShowRoleModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleRoleRequest} className="space-y-4">
+                  <div>
+                    <label htmlFor="role_type" className="block text-sm font-medium text-gray-700 mb-2">
+                      Vai trò muốn đăng ký
+                    </label>
+                    <select
+                      id="role_type"
+                      value={roleRequestForm.role_type}
+                      onChange={(e) => setRoleRequestForm({ ...roleRequestForm, role_type: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="space_owner">🏠 Space Owner - Quản lý không gian</option>
+                      <option value="artist">🎤 Artist - Nghệ sĩ biểu diễn</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-2">
+                      Lý do đăng ký *
+                    </label>
+                    <textarea
+                      id="reason"
+                      value={roleRequestForm.reason}
+                      onChange={(e) => setRoleRequestForm({ ...roleRequestForm, reason: e.target.value })}
+                      rows={4}
+                      required
+                      placeholder={roleRequestForm.role_type === 'space_owner' 
+                        ? "VD: Tôi sở hữu một không gian văn hóa tại Hà Nội và muốn chia sẻ với cộng đồng..." 
+                        : "VD: Tôi là nghệ sĩ độc lập với 5 năm kinh nghiệm biểu diễn acoustic..."}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="portfolio_url" className="block text-sm font-medium text-gray-700 mb-2">
+                      Link portfolio / Social media (tùy chọn)
+                    </label>
+                    <input
+                      id="portfolio_url"
+                      type="url"
+                      value={roleRequestForm.portfolio_url}
+                      onChange={(e) => setRoleRequestForm({ ...roleRequestForm, portfolio_url: e.target.value })}
+                      placeholder="https://instagram.com/yourname hoặc https://yourwebsite.com"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button" // Added type button
+                      onClick={() => setShowRoleModal(false)}
+                      className="flex-1 px-6 py-3 rounded-xl bg-gray-200 text-gray-800 font-medium hover:bg-gray-300"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={createRoleRequestMutation.isPending}
+                      className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:shadow-lg disabled:opacity-50"
+                    >
+                      {createRoleRequestMutation.isPending ? "Đang gửi..." : "Gửi yêu cầu"}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+// NEW: Luxury Login Screen with Ocean Waves & Clouds
+function YouLoginScreen({ setShowAuthModal }) {
+  const { scrollYProgress } = useScroll();
+  
+  const cloudY1 = useTransform(scrollYProgress, [0, 1], [0, 100]);
+  const cloudY2 = useTransform(scrollYProgress, [0, 1], [0, 150]);
+  const cloudY3 = useTransform(scrollYProgress, [0, 1], [0, 80]);
+  const waveY = useTransform(scrollYProgress, [0, 1], [0, -30]);
+
+  return (
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Ocean to Sky Gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0D47A1] via-[#1E88E5] via-[#42A5F5] to-[#B8D8F0]"></div>
+
+      {/* Beautiful Clouds - Multiple Layers */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Cloud Layer 1 - Top */}
+        <motion.div
+          animate={{ x: [-200, typeof window !== 'undefined' ? window.innerWidth + 200 : 2000] }}
+          transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
+          style={{ y: cloudY1 }}
+          className="absolute top-[10%] -left-32"
+        >
+          <div className="w-64 h-16 rounded-full bg-gradient-to-r from-transparent via-white/30 to-transparent blur-2xl"></div>
+        </motion.div>
+
+        {/* Cloud Layer 2 - Middle */}
+        <motion.div
+          animate={{ x: [-300, typeof window !== 'undefined' ? window.innerWidth + 300 : 2200] }}
+          transition={{ duration: 80, repeat: Infinity, ease: "linear", delay: 20 }}
+          style={{ y: cloudY2 }}
+          className="absolute top-[30%] -left-48"
+        >
+          <div className="w-96 h-20 rounded-full bg-gradient-to-r from-transparent via-white/25 to-transparent blur-3xl"></div>
+        </motion.div>
+
+        {/* Cloud Layer 3 - Lower */}
+        <motion.div
+          animate={{ x: [-150, typeof window !== 'undefined' ? window.innerWidth + 150 : 1800] }}
+          transition={{ duration: 70, repeat: Infinity, ease: "linear", delay: 40 }}
+          style={{ y: cloudY3 }}
+          className="absolute top-[50%] -left-24"
+        >
+          <div className="w-72 h-14 rounded-full bg-gradient-to-r from-transparent via-white/20 to-transparent blur-2xl"></div>
+        </motion.div>
+
+        {/* Ambient light particles */}
+        <div className="absolute inset-0 opacity-20">
+          {[...Array(15)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-1.5 h-1.5 bg-white rounded-full"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 70}%`,
+              }}
+              animate={{
+                y: [0, -20, 0],
+                opacity: [0.3, 0.7, 0.3],
+              }}
+              transition={{
+                duration: 3 + Math.random() * 2,
+                repeat: Infinity,
+                delay: Math.random() * 2,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Ocean Waves at Bottom */}
+      <motion.div 
+        style={{ y: waveY }}
+        className="absolute bottom-0 left-0 right-0 pointer-events-none"
+      >
+        <svg viewBox="0 0 1440 320" className="w-full h-40 md:h-60">
+          {/* Wave 1 - Deep Ocean */}
+          <motion.path
+            fill="#0D47A1"
+            fillOpacity="0.5"
+            animate={{
+              d: [
+                "M0,192L48,197.3C96,203,192,213,288,213.3C384,213,480,203,576,181.3C672,160,768,128,864,128C960,128,1056,160,1152,165.3C1248,171,1344,149,1392,138.7L1440,128L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z",
+                "M0,160L48,170.7C96,181,192,203,288,197.3C384,192,480,160,576,154.7C672,149,768,171,864,186.7C960,203,1056,213,1152,197.3C1248,181,1344,139,1392,117.3L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"
+              ]
+            }}
+            transition={{ duration: 8, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+          />
+          
+          {/* Wave 2 - Mid Ocean */}
+          <motion.path
+            fill="#1E88E5"
+            fillOpacity="0.3"
+            animate={{
+              d: [
+                "M0,224L48,213.3C96,203,192,181,288,181.3C384,181,480,203,576,213.3C672,224,768,224,864,208C960,192,1056,160,1152,154.7C1248,149,1344,171,1392,181.3L1440,192L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z",
+                "M0,256L48,240C96,224,192,192,288,181.3C384,171,480,181,576,197.3C672,213,768,235,864,224C960,213,1056,171,1152,165.3C1248,160,1344,192,1392,208L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"
+              ]
+            }}
+            transition={{ duration: 6, repeat: Infinity, repeatType: "reverse", ease: "easeInOut", delay: 1 }}
+          />
+        </svg>
+      </motion.div>
+
+      {/* Content - CENTERED PROPERLY */}
+      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-20">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="max-w-xl w-full"
+        >
+          
+          {/* Title */}
+          <div className="text-center mb-8">
+            <motion.h1 
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring" }}
+              className="text-7xl md:text-8xl font-handwriting text-white mb-4 drop-shadow-2xl"
+            >
+              You
+            </motion.h1>
+            <p className="text-lg md:text-xl text-white/95 font-light drop-shadow-md">
+              Hành trình âm nhạc của bạn
+            </p>
+          </div>
+
+          {/* Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-2xl"
+          >
+            
+            {/* Luxury Icon */}
+            <div className="relative w-16 h-16 mx-auto mb-4">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl blur-xl opacity-60"></div>
+              <div className="relative w-full h-full rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-xl">
+                <User className="w-8 h-8 text-white drop-shadow-lg" />
+              </div>
+            </div>
+
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 text-center mb-2">
+              Bắt đầu hành trình
+            </h2>
+            
+            <p className="text-center text-gray-600 mb-6 leading-relaxed text-sm md:text-base">
+              Ghi lại tâm trạng, nhận gợi ý AI và kết nối với cộng đồng yêu âm nhạc
+            </p>
+
+            {/* Luxury Benefits */}
+            <div className="space-y-2.5 mb-6">
+              <div className="flex items-center gap-3 text-gray-700">
+                <div className="relative w-8 h-8 flex-shrink-0">
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-200 to-purple-300 rounded-full blur-sm"></div>
+                  <div className="relative w-full h-full rounded-full bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center shadow-sm">
+                    <span className="text-base">📝</span>
+                  </div>
+                </div>
+                <span className="text-sm font-medium">Nhật ký tâm trạng cá nhân</span>
+              </div>
+              
+              <div className="flex items-center gap-3 text-gray-700">
+                <div className="relative w-8 h-8 flex-shrink-0">
+                  <div className="absolute inset-0 bg-gradient-to-br from-amber-200 to-amber-300 rounded-full blur-sm"></div>
+                  <div className="relative w-full h-full rounded-full bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center shadow-sm">
+                    <span className="text-base">✨</span>
+                  </div>
+                </div>
+                <span className="text-sm font-medium">Gợi ý thông minh từ AI</span>
+              </div>
+              
+              <div className="flex items-center gap-3 text-gray-700">
+                <div className="relative w-8 h-8 flex-shrink-0">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-200 to-blue-300 rounded-full blur-sm"></div>
+                  <div className="relative w-full h-full rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-sm">
+                    <span className="text-base">🎯</span>
+                  </div>
+                </div>
+                <span className="text-sm font-medium">Theo dõi hoạt động & cộng đồng</span>
+              </div>
+            </div>
+
+            {/* Luxury CTA */}
+            <motion.button
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowAuthModal(true)}
+              className="relative w-full py-3.5 overflow-hidden rounded-2xl group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 bg-[length:200%_100%] group-hover:animate-[shimmer_2s_ease-in-out_infinite]"></div>
+              <span className="relative text-white font-semibold text-base md:text-lg drop-shadow-sm">
+                Đăng nhập
+              </span>
+            </motion.button>
+
+            <p className="text-center text-xs text-gray-500 mt-3">
+              Miễn phí • An toàn • 500+ thành viên
+            </p>
+          </motion.div>
+
+          {/* Journey Path */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="mt-6 text-center"
+          >
+            <p className="text-white/90 text-sm mb-2 drop-shadow">Hành trình hoàn chỉnh</p>
+            <div className="flex items-center justify-center gap-2">
+              <a href={createPageUrl("We")} className="px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors text-sm text-white/95 backdrop-blur-sm shadow-lg">
+                We
+              </a>
+              <span className="text-white/70 text-sm">→</span>
+              <a href={createPageUrl("Love")} className="px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors text-sm text-white/95 backdrop-blur-sm shadow-lg">
+                Love
+              </a>
+              <span className="text-white/70 text-sm">→</span>
+              <span className="px-3 py-1.5 rounded-full bg-white/40 text-sm font-medium text-white backdrop-blur-sm shadow-lg">
+                You
+              </span>
+            </div>
+          </motion.div>
+
+        </motion.div>
+      </div>
+
+      {/* Shimmer animation */}
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+      
+      {/* Modern Auth Modal */}
+      {console.log('Rendering ModernAuthModal with isOpen:', showModernAuthModal)}
+      {showModernAuthModal && (
+        <ModernAuthModal
+          key="modal"
+          isOpen={true}
+          onClose={() => {
+            console.log('Modal onClose called');
+            setShowModernAuthModal(false);
+          }}
+          onSuccess={(user) => {
+            console.log('Modal onSuccess called with user:', user);
+            setUser(user);
+            setShowModernAuthModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicSpace - Upload Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .file-input {
+            border: 2px dashed #ddd;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .file-input:hover {
+            border-color: #667eea;
+            background-color: #f8f9ff;
+        }
+        .file-input.dragover {
+            border-color: #667eea;
+            background-color: #f0f4ff;
+        }
+        .preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .preview img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            background: #f8f9fa;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+        }
+        .tab.active {
+            background: white;
+            border-bottom: 2px solid #667eea;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 MusicSpace - Upload Demo</h1>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('space')">Tạo Space</button>
+            <button class="tab" onclick="showTab('event')">Tạo Event</button>
+        </div>
+
+        <!-- Space Form -->
+        <div id="space-form" class="tab-content active">
+            <form id="spaceForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="spaceName">Tên Space *</label>
+                    <input type="text" id="spaceName" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="spaceDescription">Mô tả</label>
+                    <textarea id="spaceDescription" name="description" rows="3"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="spaceAddress">Địa chỉ</label>
+                    <input type="text" id="spaceAddress" name="address">
+                </div>
+                
+                <div class="form-group">
+                    <label for="spaceCity">Thành phố</label>
+                    <input type="text" id="spaceCity" name="city">
+                </div>
+                
+                <div class="form-group">
+                    <label for="spaceCapacity">Sức chứa</label>
+                    <input type="number" id="spaceCapacity" name="capacity">
+                </div>
+                
+                <div class="form-group">
+                    <label for="spacePrice">Giá/giờ (VNĐ)</label>
+                    <input type="number" id="spacePrice" name="price_per_hour">
+                </div>
+                
+                <div class="form-group">
+                    <label for="spaceAmenities">Tiện ích (cách nhau bằng dấu phẩy)</label>
+                    <input type="text" id="spaceAmenities" name="amenities" placeholder="WiFi, Điều hòa, Nhà vệ sinh">
+                </div>
+                
+                <div class="form-group">
+                    <label>Ảnh Space *</label>
+                    <div class="file-input" id="spaceFileInput" onclick="document.getElementById('spaceImages').click()">
+                        <p>📸 Click để chọn ảnh hoặc kéo thả vào đây</p>
+                        <p><small>Tối đa 10 ảnh, mỗi ảnh tối đa 5MB</small></p>
+                    </div>
+                    <input type="file" id="spaceImages" name="images" multiple accept="image/*" style="display: none;">
+                    <div class="preview" id="spacePreview"></div>
+                </div>
+                
+                <button type="submit">Tạo Space</button>
+            </form>
+        </div>
+
+        <!-- Event Form -->
+        <div id="event-form" class="tab-content">
+            <form id="eventForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="eventTitle">Tiêu đề Event *</label>
+                    <input type="text" id="eventTitle" name="title" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="eventDescription">Mô tả</label>
+                    <textarea id="eventDescription" name="description" rows="3"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="eventDate">Ngày diễn ra *</label>
+                    <input type="datetime-local" id="eventDate" name="event_date" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="eventDuration">Thời lượng (giờ)</label>
+                    <input type="number" id="eventDuration" name="duration_hours" value="2">
+                </div>
+                
+                <div class="form-group">
+                    <label for="eventParticipants">Số người tham gia tối đa</label>
+                    <input type="number" id="eventParticipants" name="max_participants">
+                </div>
+                
+                <div class="form-group">
+                    <label for="eventPrice">Giá vé (VNĐ)</label>
+                    <input type="number" id="eventPrice" name="price">
+                </div>
+                
+                <div class="form-group">
+                    <label for="eventSpace">Space ID</label>
+                    <input type="number" id="eventSpace" name="space_id">
+                </div>
+                
+                <div class="form-group">
+                    <label>Ảnh Event</label>
+                    <div class="file-input" id="eventFileInput" onclick="document.getElementById('eventImages').click()">
+                        <p>📸 Click để chọn ảnh hoặc kéo thả vào đây</p>
+                        <p><small>Tối đa 10 ảnh, mỗi ảnh tối đa 5MB</small></p>
+                    </div>
+                    <input type="file" id="eventImages" name="images" multiple accept="image/*" style="display: none;">
+                    <div class="preview" id="eventPreview"></div>
+                </div>
+                
+                <button type="submit">Tạo Event</button>
+            </form>
+        </div>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-form').classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
+        // File input handling
+        function setupFileInput(inputId, previewId, fileInputId) {
+            const fileInput = document.getElementById(inputId);
+            const preview = document.getElementById(previewId);
+            const fileInputDiv = document.getElementById(fileInputId);
+
+            fileInput.addEventListener('change', function(e) {
+                preview.innerHTML = '';
+                Array.from(e.target.files).forEach(file => {
+                    if (file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.src = URL.createObjectURL(file);
+                        preview.appendChild(img);
+                    }
+                });
+            });
+
+            // Drag and drop
+            fileInputDiv.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                fileInputDiv.classList.add('dragover');
+            });
+
+            fileInputDiv.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                fileInputDiv.classList.remove('dragover');
+            });
+
+            fileInputDiv.addEventListener('drop', function(e) {
+                e.preventDefault();
+                fileInputDiv.classList.remove('dragover');
+                fileInput.files = e.dataTransfer.files;
+                fileInput.dispatchEvent(new Event('change'));
+            });
+        }
+
+        // Setup file inputs
+        setupFileInput('spaceImages', 'spacePreview', 'spaceFileInput');
+        setupFileInput('eventImages', 'eventPreview', 'eventFileInput');
+
+        // Form submission
+        document.getElementById('spaceForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await submitForm('spaces', this);
+        });
+
+        document.getElementById('eventForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await submitForm('events', this);
+        });
+
+        async function submitForm(endpoint, form) {
+            const resultDiv = document.getElementById('result');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Đang xử lý...';
+            
+            try {
+                const formData = new FormData(form);
+                
+                // Note: In real app, you would get token from login
+                const response = await fetch(`${API_BASE}/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        // 'Authorization': `Bearer ${token}` // Uncomment when you have token
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult('success', `✅ Tạo ${endpoint.slice(0, -1)} thành công!`, result);
+                    form.reset();
+                    document.getElementById(endpoint === 'spaces' ? 'spacePreview' : 'eventPreview').innerHTML = '';
+                } else {
+                    showResult('error', `❌ Lỗi: ${result.error || 'Không thể tạo'}`);
+                }
+            } catch (error) {
+                showResult('error', `❌ Lỗi kết nối: ${error.message}`);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = endpoint === 'spaces' ? 'Tạo Space' : 'Tạo Event';
+            }
+        }
+
+        function showResult(type, message, data = null) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+            
+            let content = `<strong>${message}</strong>`;
+            if (data) {
+                content += `<pre style="margin-top: 10px; font-size: 12px;">${JSON.stringify(data, null, 2)}</pre>`;
+            }
+            
+            resultDiv.innerHTML = content;
+            
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Set current date as default for event date
+        document.getElementById('eventDate').value = new Date().toISOString().slice(0, 16);
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
