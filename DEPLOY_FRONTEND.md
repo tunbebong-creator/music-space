@@ -13,7 +13,7 @@
    - Branch: `main`
 4. **Cấu hình:**
    - **Name:** `music-space-frontend` (hoặc tên bạn muốn)
-   - **Build Command:** `npm ci --legacy-peer-deps && npm run build`
+   - **Build Command:** `npm install --legacy-peer-deps && npm run build`
    - **Publish Directory:** `dist`
 5. **Thêm Environment Variable:**
    - **Key:** `VITE_API_URL`
