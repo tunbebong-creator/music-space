@@ -2292,42 +2292,64 @@ app.post('/api/integrations/email', async (req, res) => {
   }
 });
 
-// Test email endpoint - Direct call to email logic
-app.post('/api/test-email', async (req, res) => {
+// Simple email test endpoint - logs EVERYTHING
+app.post('/api/debug-email', async (req, res) => {
+  console.log('========================================');
+  console.log('🧪 DEBUG EMAIL ENDPOINT CALLED');
+  console.log('========================================');
+  console.log('📧 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('📧 Environment variables:');
+  console.log('  - SMTP_HOST:', process.env.SMTP_HOST);
+  console.log('  - SMTP_PORT:', process.env.SMTP_PORT);
+  console.log('  - SMTP_USER:', process.env.SMTP_USER);
+  console.log('  - SMTP_PASS:', process.env.SMTP_PASS ? '(exists)' : '(missing)');
+  console.log('  - RESEND_API_KEY:', process.env.RESEND_API_KEY ? '(exists)' : '(missing)');
+  console.log('  - SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? '(exists)' : '(missing)');
+  console.log('========================================');
+  
   try {
-    const { to = 'test@example.com' } = req.body;
-    console.log('🧪 Testing email to:', to);
+    const { to = 'test@example.com' } = req.body || {};
     
     const testBody = `
       <div style="font-family: Arial, sans-serif; padding: 20px;">
-        <h2>Test Email từ Music Space</h2>
+        <h2>🧪 Debug Test Email từ Music Space</h2>
         <p>Nếu bạn nhận được email này, hệ thống email đang hoạt động!</p>
         <p>Thời gian: ${new Date().toLocaleString('vi-VN')}</p>
+        <p>Backend: Render</p>
       </div>
     `;
     
-    // Call email endpoint directly
-    const emailResponse = await fetch(`${req.protocol}://${req.get('host')}/api/integrations/email`, {
+    // Call the email integration endpoint
+    const emailResponse = await fetch(`http://localhost:${PORT}/api/integrations/email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to,
-        subject: 'Test Email - Music Space',
+        subject: '🧪 Debug Test Email - Music Space',
         body: testBody,
-        from_name: 'Music Space Test'
+        from_name: 'Music Space Debug'
       })
     });
     
-    if (emailResponse.ok) {
-      const result = await emailResponse.json();
-      res.json({ success: true, message: 'Test email sent', result });
-    } else {
-      const errorText = await emailResponse.text();
-      res.status(500).json({ error: 'Failed to send test email', details: errorText });
-    }
+    const result = await emailResponse.json();
+    console.log('📧 Email endpoint response:', JSON.stringify(result, null, 2));
+    
+    res.json({ 
+      success: emailResponse.ok, 
+      emailResult: result,
+      env: {
+        hasSMTP: !!process.env.SMTP_HOST,
+        hasResend: !!process.env.RESEND_API_KEY,
+        hasSendGrid: !!process.env.SENDGRID_API_KEY
+      }
+    });
   } catch (error) {
-    console.error('❌ Test email error:', error);
-    res.status(500).json({ error: 'Test email failed', details: String(error) });
+    console.error('❌ Debug email error:', error);
+    res.status(500).json({ 
+      error: 'Debug email failed', 
+      details: String(error),
+      stack: error.stack
+    });
   }
 });
 

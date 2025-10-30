@@ -32,7 +32,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://usic-space-server.onrender.com/api
+        value: https://music-space-server.onrender.com/api
 
 
 
