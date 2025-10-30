@@ -1,7 +1,7 @@
 // API Configuration
 // Use environment variable or default to Render backend URL
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://usic-space-server.onrender.com/api';
-export const API_UPLOAD_BASE = import.meta.env.VITE_API_URL || 'https://usic-space-server.onrender.com';
+export const API_UPLOAD_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://usic-space-server.onrender.com';
 
 // Helper function to get full URL
 export const getApiUrl = (endpoint) => {

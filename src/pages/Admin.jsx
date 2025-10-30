@@ -31,6 +31,9 @@ import {
 } from "lucide-react";
 import ChatPanel from "@/components/ChatPanel";
 import { format } from "date-fns";
+import { API_BASE_URL, getUploadUrl } from '@/config/api.js';
+
+const API_BASE = API_BASE_URL.replace('/api', '');
 
 export default function Admin() {
   const [user, setUser] = React.useState(null);
@@ -88,7 +91,7 @@ export default function Admin() {
         
         // Generate a proper admin JWT token from server
         try {
-          const response = await fetch('http://localhost:3001/api/generate-admin-token', {
+          const response = await fetch(`${API_BASE}/api/generate-admin-token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
           });
@@ -142,6 +145,10 @@ export default function Admin() {
   //   };
   // }, [activeTab, user]);
 
+import { API_BASE_URL, getUploadUrl } from '@/config/api.js';
+
+// ... existing code ...
+
   // API functions
   const fetchWithAuth = async (url, options = {}) => {
     try {
@@ -150,7 +157,8 @@ export default function Admin() {
       console.log('🔍 Debug - Fetching URL:', url);
       console.log('🔍 Debug - Token:', token);
       
-      const response = await fetch(`http://localhost:3001${url}`, {
+      const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+      const response = await fetch(fullUrl, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -191,7 +199,7 @@ export default function Admin() {
       formData.append('type', type);
       
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:3001/api/upload', {
+      const response = await fetch(`${API_BASE}/api/upload`, {
         method: 'POST',
         body: formData,
         headers: {
@@ -538,7 +546,7 @@ export default function Admin() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/integrations/email', {
+      const response = await fetch(`${API_BASE}/api/integrations/email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
