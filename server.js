@@ -92,11 +92,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
 // Debug: check uploads existence
 app.get('/api/debug/uploads', (req, res) => {
   try {
