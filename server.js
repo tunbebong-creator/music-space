@@ -1813,9 +1813,14 @@ app.get('/api/bookings', async (req, res) => {
 });
 
 app.post('/api/bookings', async (req, res) => {
+  console.log('📝 POST /api/bookings - Request received');
+  const startTime = Date.now();
+  
   try {
     // Accept both snake_case and camelCase from the client
     const body = req.body || {};
+    console.log('📝 Booking request body:', JSON.stringify(body));
+    
     const space_id = body.space_id ?? body.spaceId ?? null;
     const user_id = body.user_id ?? body.userId ?? null;
     const event_id = body.event_id ?? body.eventId ?? null;
@@ -1837,8 +1842,10 @@ app.post('/api/bookings', async (req, res) => {
     let finalTotalPrice = total_price;
 
     if (event_id && (!finalBookingDate || !finalStartTime || !finalEndTime)) {
+      console.log('📝 Fetching event details for event_id:', event_id);
       const eventResult = await pool.query('SELECT event_date, duration_hours, price, title FROM events WHERE id = $1', [event_id]);
       if (eventResult.rows.length === 0) {
+        console.error('❌ Event not found:', event_id);
         return res.status(400).json({ error: 'Invalid event_id' });
       }
       const event = eventResult.rows[0];
@@ -1877,6 +1884,7 @@ app.post('/api/bookings', async (req, res) => {
       if (!finalEndTime) finalEndTime = finalStartTime;
     }
 
+    console.log('📝 Inserting booking into database...');
     const insertResult = await pool.query(
       `INSERT INTO bookings (
          space_id, user_id, event_id, booking_date, start_time, end_time, total_price, status, payment_status,
@@ -1900,6 +1908,8 @@ app.post('/api/bookings', async (req, res) => {
     );
 
     const booking = insertResult.rows[0];
+    console.log('✅ Booking inserted successfully:', booking.id);
+    console.log('⏱️ Time taken:', Date.now() - startTime, 'ms');
 
     // Send confirmation email if customer_email provided and email integration is configured
     // Do this asynchronously so it doesn't block the response
@@ -1968,10 +1978,13 @@ app.post('/api/bookings', async (req, res) => {
     }
 
     // Return booking immediately without waiting for email
+    console.log('📤 Sending response...');
     res.json(booking);
+    console.log('✅ Response sent successfully');
   } catch (error) {
-    console.error('Error creating booking:', error);
-    res.status(500).json({ error: 'Failed to create booking' });
+    console.error('❌ Error creating booking:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to create booking', details: error.message });
   }
 });
 
