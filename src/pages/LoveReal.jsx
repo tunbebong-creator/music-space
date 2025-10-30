@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
+import { getUploadUrl, API_BASE_URL } from "@/config/api.js";
 
 export default function LoveReal() {
   const navigate = useNavigate();
@@ -14,9 +15,7 @@ export default function LoveReal() {
 
   const buildImageUrl = (url) => {
     if (!url) return null;
-    if (url.startsWith('http://localhost:3001/uploads')) return url;
-    if (url.startsWith('/uploads/')) return `http://localhost:3001${url}`;
-    return `http://localhost:3001/uploads/events/${url}`;
+    return getUploadUrl(url);
   };
 
   // Function to calculate distance between two coordinates (Haversine formula)
@@ -354,7 +353,7 @@ export default function LoveReal() {
     queryKey: ['spaces'],
     queryFn: async () => {
       console.log('🔍 Debug - Fetching spaces for Love page...');
-      const response = await fetch('http://localhost:3001/api/spaces?status=approved');
+      const response = await fetch(`${API_BASE_URL.replace('/api', '')}/api/spaces?status=approved`);
       if (!response.ok) throw new Error('Failed to fetch spaces');
       const data = await response.json();
       console.log('✅ Debug - Spaces fetched for Love page:', data);
@@ -367,7 +366,7 @@ export default function LoveReal() {
   const { data: eventsData, isLoading: eventsLoading, refetch: refetchEvents } = useQuery({
     queryKey: ['events'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3001/api/events');
+      const response = await fetch(`${API_BASE_URL.replace('/api', '')}/api/events`);
       if (!response.ok) throw new Error('Failed to fetch events');
       const data = await response.json();
       console.log('🔍 LoveReal - API Response:', data);

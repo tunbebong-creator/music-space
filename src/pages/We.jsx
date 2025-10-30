@@ -9,6 +9,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import Pagination from "../components/Pagination";
 import ModernAuthModal from "../components/ModernAuthModal";
+import { getUploadUrl } from "@/config/api.js";
 
 export default function We() {
   const [user, setUser] = React.useState(null);
@@ -373,12 +374,10 @@ export default function We() {
                       mediaUrls = [post.image_url, ...mediaUrls];
                     }
                     
-                    // Ensure URLs are full URLs
+                    // Ensure URLs are full URLs using getUploadUrl
                     mediaUrls = mediaUrls.map(url => {
                       if (!url) return null;
-                      if (url.startsWith('http')) return url;
-                      if (url.startsWith('/')) return `http://localhost:3001${url}`;
-                      return `http://localhost:3001/${url}`;
+                      return getUploadUrl(url);
                     }).filter(Boolean);
                     
                     const firstMedia = mediaUrls[0];
