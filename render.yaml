@@ -28,11 +28,12 @@ services:
   - type: web
     name: music-space-frontend
     env: static
-    buildCommand: npm install --legacy-peer-deps && npm run build
+    buildCommand: npm ci --legacy-peer-deps && npm run build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
         value: https://usic-space-server.onrender.com/api
+
 
 
 
