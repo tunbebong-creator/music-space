@@ -1934,7 +1934,7 @@ app.post('/api/bookings', async (req, res) => {
     // Send confirmation email AFTER response is sent (non-blocking)
     if (customer_email) {
       console.log('📧 Scheduling email to be sent...');
-      // Use setImmediate to ensure email doesn't block, but also add error handling
+      // Use setImmediate to ensure email doesn't block
       setImmediate(async () => {
         try {
           console.log('📧 Email sending started for:', customer_email);
@@ -1957,35 +1957,7 @@ app.post('/api/bookings', async (req, res) => {
             </div>
           `;
 
-          // Try to send via internal API endpoint first (more reliable)
-          try {
-            const emailPayload = {
-              to: customer_email,
-              subject,
-              body,
-              from_name: siteName
-            };
-            
-            // Call our own email endpoint internally
-            const emailResponse = await fetch(`http://localhost:${PORT}/api/integrations/email`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(emailPayload)
-            });
-            
-            if (emailResponse.ok) {
-              console.log('✅ Email sent via internal API endpoint');
-              return;
-            } else {
-              console.warn('⚠️ Internal email API failed, trying direct SMTP...');
-              const errorText = await emailResponse.text();
-              console.warn('⚠️ Error:', errorText);
-            }
-          } catch (apiError) {
-            console.warn('⚠️ Failed to send via internal API, trying direct SMTP:', apiError.message);
-          }
-
-          // Fallback: Direct SMTP
+          // Direct SMTP sending (better for Render)
           let nodemailer;
           try {
             nodemailer = (await import('nodemailer')).default;
@@ -2017,15 +1989,18 @@ app.post('/api/bookings', async (req, res) => {
                 user: process.env.SMTP_USER, 
                 pass: process.env.SMTP_PASS 
               } : undefined,
-              // Add timeout and connection timeout
+              // Add timeout and connection timeout to prevent hanging
               connectionTimeout: 10000,
               greetingTimeout: 10000,
-              socketTimeout: 10000
+              socketTimeout: 10000,
+              // Disable verification on Render (might be blocked)
+              tls: {
+                rejectUnauthorized: false
+              }
             });
             
-            // Skip verification on Render (might be blocked)
-            // Just try to send directly
-            console.log('📧 Sending email directly without verification...');
+            // Skip verification on Render (might be blocked by firewall)
+            console.log('📧 Skipping SMTP verification (Render might block)');
           } else {
             console.log('⚠️ No SMTP config, skipping email');
             return;
@@ -2075,25 +2050,55 @@ app.post('/api/bookings', async (req, res) => {
 
 // Simple email integration endpoint for frontend calls
 app.post('/api/integrations/email', async (req, res) => {
-  console.log('=== GỌI API EMAIL BOOKING, BODY:', req.body);
+  console.log('=== EMAIL API CALLED ===');
+  console.log('📧 Request body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const { to, subject, body, from_name } = req.body || {};
+    
+    if (!to) {
+      return res.status(400).json({ error: 'Email recipient (to) is required' });
+    }
+    
     let nodemailer;
     try {
       nodemailer = (await import('nodemailer')).default;
+      console.log('📧 Nodemailer loaded');
     } catch(e) {
-      console.error('Không tìm thấy nodemailer:', e);
+      console.error('❌ Không tìm thấy nodemailer:', e);
       return res.status(500).json({ error: 'Nodemailer not installed' });
     }
+    
     let transporter;
     if (process.env.SMTP_HOST) {
+      console.log('📧 Using SMTP config:', {
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        user: process.env.SMTP_USER
+      });
+      
       transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port: Number(process.env.SMTP_PORT || 587),
         secure: Boolean(process.env.SMTP_SECURE === 'true'),
-        auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined
+        auth: process.env.SMTP_USER ? { 
+          user: process.env.SMTP_USER, 
+          pass: process.env.SMTP_PASS 
+        } : undefined,
+        // Add timeouts to prevent hanging
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+        // Disable TLS verification on Render (might be blocked)
+        tls: {
+          rejectUnauthorized: false
+        }
       });
+      
+      // Skip verification on Render - might be blocked
+      console.log('📧 Skipping SMTP verification (might be blocked on Render)');
     } else {
+      console.log('⚠️ No SMTP config, using test account');
       const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
         host: 'smtp.ethereal.email',
@@ -2102,19 +2107,36 @@ app.post('/api/integrations/email', async (req, res) => {
         auth: { user: testAccount.user, pass: testAccount.pass }
       });
     }
+    
+    console.log('📧 Sending email to:', to);
     const info = await transporter.sendMail({
       from: from_name ? `${from_name} <${process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@musicspace.dev'}>` : (process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@musicspace.dev'),
       to,
       subject,
       html: body
     });
+    
+    console.log('✅ Email sent:', {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected
+    });
+    
     const preview = nodemailer.getTestMessageUrl ? nodemailer.getTestMessageUrl(info) : null;
     if (preview) {
       console.log('✉️ Email preview URL:', preview);
     }
-    res.json({ success: true, preview });
+    
+    res.json({ success: true, preview, messageId: info.messageId });
   } catch (error) {
-    console.error('=== EMAIL ERROR (API):', error);
+    console.error('❌ EMAIL ERROR (API):', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
     res.status(500).json({ error: 'Failed to send email', details: String(error) });
   }
 });
