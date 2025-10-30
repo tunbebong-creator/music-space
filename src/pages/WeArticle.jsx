@@ -296,6 +296,8 @@ export default function WeArticle() {
       }
       
       const apiBase = API_BASE_URL.replace('/api', '');
+      console.log('🔍 Adding reaction:', { postId, reactionType, apiBase });
+      
       const response = await fetch(`${apiBase}/api/blog-posts/${postId}/reactions`, {
         method: 'POST',
         headers: {
@@ -305,19 +307,30 @@ export default function WeArticle() {
         body: JSON.stringify({ reaction_type: reactionType })
       });
       
+      console.log('🔍 Reaction response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to add reaction' }));
-        throw new Error(errorData.error || 'Failed to add reaction');
+        const errorText = await response.text();
+        console.error('🔍 Reaction error response:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Failed to add reaction' };
+        }
+        throw new Error(errorData.error || errorData.details || 'Failed to add reaction');
       }
       
-      return await response.json();
+      const result = await response.json();
+      console.log('✅ Reaction added successfully:', result);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['post-reactions', postId]);
       queryClient.invalidateQueries(['blog-posts']);
     },
     onError: (error) => {
-      console.error('Error adding reaction:', error);
+      console.error('❌ Error adding reaction:', error);
       alert('Có lỗi xảy ra: ' + error.message);
     }
   });
@@ -330,7 +343,13 @@ export default function WeArticle() {
         throw new Error('Vui lòng đăng nhập');
       }
       
+      if (!content || !content.trim()) {
+        throw new Error('Vui lòng nhập nội dung bình luận');
+      }
+      
       const apiBase = API_BASE_URL.replace('/api', '');
+      console.log('🔍 Adding comment:', { postId, content, parentId, apiBase });
+      
       const response = await fetch(`${apiBase}/api/blog-posts/${postId}/comments`, {
         method: 'POST',
         headers: {
@@ -340,19 +359,30 @@ export default function WeArticle() {
         body: JSON.stringify({ content, parent_id: parentId })
       });
       
+      console.log('🔍 Comment response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to add comment' }));
-        throw new Error(errorData.error || 'Failed to add comment');
+        const errorText = await response.text();
+        console.error('🔍 Comment error response:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Failed to add comment' };
+        }
+        throw new Error(errorData.error || errorData.details || 'Failed to add comment');
       }
       
-      return await response.json();
+      const result = await response.json();
+      console.log('✅ Comment added successfully:', result);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['post-comments', postId]);
       queryClient.invalidateQueries(['blog-posts']);
     },
     onError: (error) => {
-      console.error('Error adding comment:', error);
+      console.error('❌ Error adding comment:', error);
       alert('Có lỗi xảy ra: ' + error.message);
     }
   });
