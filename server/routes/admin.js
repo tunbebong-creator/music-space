@@ -517,6 +517,16 @@ router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
       verified
     } = req.body;
 
+    // Get current space to preserve status if not provided
+    const currentSpace = await pool.query('SELECT status, verified FROM spaces WHERE id = $1', [id]);
+    if (currentSpace.rows.length === 0) {
+      return res.status(404).json({ error: 'Space not found' });
+    }
+
+    // Preserve status and verified if not provided in request
+    const finalStatus = status !== undefined && status !== null ? status : currentSpace.rows[0].status;
+    const finalVerified = verified !== undefined && verified !== null ? verified : currentSpace.rows[0].verified;
+
     const result = await pool.query(
       `UPDATE spaces 
        SET name = $1, description = $2, address = $3, city = $4, capacity = $5,
@@ -524,7 +534,7 @@ router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
            status = $10, verified = $11, updated_at = CURRENT_TIMESTAMP
        WHERE id = $12
        RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status, verified, id]
+      [name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, finalStatus, finalVerified, id]
     );
 
     if (result.rows.length === 0) {

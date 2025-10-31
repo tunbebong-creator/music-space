@@ -22,6 +22,7 @@ export default function EditSpace() {
   const [loading, setLoading] = React.useState(false);
   const [uploadingImages, setUploadingImages] = React.useState(false);
   const [spaceImages, setSpaceImages] = React.useState([]);
+  const [currentStatus, setCurrentStatus] = React.useState(null);
   const [formData, setFormData] = React.useState({
     name: '',
     description: '',
@@ -74,6 +75,11 @@ export default function EditSpace() {
             contact_phone: space.contact_phone || '',
             google_maps_url: space.google_maps_url || ''
           });
+          
+          // Preserve status to prevent resetting on update
+          if (space.status) {
+            setCurrentStatus(space.status);
+          }
           
           if (space.images && space.images.length > 0) {
             setSpaceImages(space.images);
@@ -161,7 +167,8 @@ export default function EditSpace() {
         amenities: formData.amenities.split(',').map(s => s.trim()).filter(s => s),
         equipment: formData.equipment.split(',').map(s => s.trim()).filter(s => s),
         images: spaceImages,
-        owner_id: 1 // Default to admin for now
+        owner_id: 1, // Default to admin for now
+        status: currentStatus || 'approved' // Preserve current status or default to approved
       };
 
       // Get token
