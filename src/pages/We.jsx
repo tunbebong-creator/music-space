@@ -362,14 +362,17 @@ export default function We() {
                         try {
                           mediaUrls = JSON.parse(post.media_urls);
                         } catch {
-                          mediaUrls = [];
+                          // If parsing fails, try treating as single URL
+                          if (post.media_urls.trim()) {
+                            mediaUrls = [post.media_urls];
+                          }
                         }
                       } else if (Array.isArray(post.media_urls)) {
                         mediaUrls = post.media_urls;
                       }
                     }
                     
-                    // Add image_url to mediaUrls if exists
+                    // Add image_url to mediaUrls if exists and not already included
                     if (post.image_url && !mediaUrls.includes(post.image_url)) {
                       mediaUrls = [post.image_url, ...mediaUrls];
                     }
@@ -377,12 +380,23 @@ export default function We() {
                     // Ensure URLs are full URLs using getUploadUrl
                     mediaUrls = mediaUrls.map(url => {
                       if (!url) return null;
-                      return getUploadUrl(url);
+                      const fullUrl = getUploadUrl(url);
+                      console.log(`🖼️ Processing image URL: ${url} -> ${fullUrl}`);
+                      return fullUrl;
                     }).filter(Boolean);
                     
                     const firstMedia = mediaUrls[0];
                     
-                    if (!firstMedia) return null;
+                    if (!firstMedia) {
+                      console.warn(`⚠️ No media found for post ${post.id}:`, {
+                        image_url: post.image_url,
+                        media_urls: post.media_urls,
+                        post_title: post.title
+                      });
+                      return null;
+                    }
+                    
+                    console.log(`✅ Displaying image for post ${post.id}:`, firstMedia);
                     
                     const isVideo = firstMedia?.includes('/videos/') || firstMedia?.match(/\.(mp4|webm|ogg)$/i);
                     

@@ -568,25 +568,45 @@ app.get('/api/blog-posts', async (req, res) => {
           try {
             mediaUrls = JSON.parse(post.media_urls);
           } catch {
-            mediaUrls = [];
+            // If parsing fails, try treating as single URL
+            if (post.media_urls.trim()) {
+              mediaUrls = [post.media_urls];
+            }
           }
         } else if (Array.isArray(post.media_urls)) {
           mediaUrls = post.media_urls;
         }
       }
       
+      // Add image_url to mediaUrls if it exists and not already included
+      if (post.image_url && !mediaUrls.includes(post.image_url)) {
+        mediaUrls = [post.image_url, ...mediaUrls];
+      }
+      
       // Get user info if user_id exists
       let createdBy = post.created_by || 'Music Space';
       let userEmail = null;
       
-      return {
+      const processedPost = {
         ...post,
         likes: post.likes || 0,
         comment_count: post.comment_count || 0,
         media_urls: mediaUrls,
+        image_url: post.image_url || null, // Ensure image_url is included
         created_by: createdBy,
         user_email: userEmail
       };
+      
+      // Debug logging for posts with media
+      if (processedPost.image_url || processedPost.media_urls?.length > 0) {
+        console.log(`📸 Post ${processedPost.id} media:`, {
+          image_url: processedPost.image_url,
+          media_urls: processedPost.media_urls,
+          media_count: processedPost.media_urls?.length || 0
+        });
+      }
+      
+      return processedPost;
     });
     
     console.log('✅ Returning', posts.length, 'posts');
