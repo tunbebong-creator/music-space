@@ -3499,11 +3499,14 @@ app.get('/api/artist/events', authenticateToken, async (req, res) => {
     const allEventsCheck = await pool.query(`
       SELECT COUNT(*) as total, 
              COUNT(*) FILTER (WHERE status = 'approved') as approved_count,
-             COUNT(*) FILTER (WHERE status = 'approved' AND (event_date IS NULL OR event_date >= CURRENT_DATE)) as upcoming_approved_count
+             COUNT(*) FILTER (WHERE status = 'approved' AND (event_date IS NULL OR event_date >= CURRENT_DATE)) as upcoming_approved_count,
+             COUNT(*) FILTER (WHERE status = 'approved' AND (event_date IS NULL OR event_date >= CURRENT_DATE - INTERVAL '7 days')) as available_approved_count
       FROM events
     `);
     console.log('📊 Events stats:', allEventsCheck.rows[0]);
     
+    // Show all approved events (not just upcoming) so artists can see what's available
+    // Prioritize upcoming events but also show recent past events
     const result = await pool.query(`
       SELECT e.*, 
              s.name as space_name, 
@@ -3516,9 +3519,18 @@ app.get('/api/artist/events', authenticateToken, async (req, res) => {
       LEFT JOIN spaces s ON CAST(e.space_id AS TEXT) = CAST(s.id AS TEXT)
       LEFT JOIN users u ON CAST(e.organizer_id AS TEXT) = CAST(u.id AS TEXT)
       ${registrationJoin}
-      WHERE e.status = 'approved' 
-        AND (e.event_date IS NULL OR e.event_date >= CURRENT_DATE)
-      ORDER BY COALESCE(e.event_date, '2099-12-31'::date) ASC
+      WHERE e.status = 'approved'
+        AND (
+          e.event_date IS NULL 
+          OR e.event_date >= CURRENT_DATE - INTERVAL '7 days'  -- Show events from last 7 days to future
+        )
+      ORDER BY 
+        CASE 
+          WHEN e.event_date IS NULL THEN 0
+          WHEN e.event_date >= CURRENT_DATE THEN 1
+          ELSE 2
+        END,
+        COALESCE(e.event_date, '2099-12-31'::date) ASC
       LIMIT $2 OFFSET $3
     `, [req.user.id, parseInt(limit), offset]);
     
@@ -3528,8 +3540,11 @@ app.get('/api/artist/events', authenticateToken, async (req, res) => {
     const countResult = await pool.query(`
       SELECT COUNT(*) as count
       FROM events e
-      WHERE e.status = 'approved' 
-        AND (e.event_date IS NULL OR e.event_date >= CURRENT_DATE)
+      WHERE e.status = 'approved'
+        AND (
+          e.event_date IS NULL 
+          OR e.event_date >= CURRENT_DATE - INTERVAL '7 days'
+        )
     `);
     
     res.json({
