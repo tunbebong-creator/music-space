@@ -1,6 +1,7 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
 export default function SpaceDetail() {
   const { id } = useParams();
@@ -19,7 +20,8 @@ export default function SpaceDetail() {
   const { data: space, isLoading, error } = useQuery({
     queryKey: ['space', id],
     queryFn: async () => {
-      const response = await fetch(`http://localhost:3001/api/spaces/${id}`);
+      const apiBase = API_BASE_URL.replace('/api', '');
+      const response = await fetch(`${apiBase}/api/spaces/${id}`);
       if (!response.ok) throw new Error('Failed to fetch space details');
       return response.json();
     }
@@ -65,13 +67,17 @@ export default function SpaceDetail() {
             <div className="h-96 relative overflow-hidden rounded-2xl shadow-lg mb-8">
               {space.images && space.images.length > 0 ? (
                 <img 
-                  src={`http://localhost:3001${space.images[0]}`} 
+                  src={getUploadUrl(space.images[0])} 
                   alt={space.name}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                   onError={(e) => {
                     console.log('❌ SpaceDetail cover image load error:', space.images[0]);
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
+                    e.target.style.opacity = '0.5';
+                    e.target.onerror = null;
+                  }}
+                  onLoad={() => {
+                    console.log('✅ SpaceDetail cover image loaded:', space.images[0]);
                   }}
                 />
               ) : null}
@@ -97,12 +103,17 @@ export default function SpaceDetail() {
                   {space.images.slice(1).map((image, index) => (
                     <img 
                       key={index}
-                      src={`http://localhost:3001${image}`} 
+                      src={getUploadUrl(image)} 
                       alt={`Gallery ${index + 1}`}
                       className="w-full h-48 object-cover rounded-lg shadow-sm"
+                      loading="lazy"
                       onError={(e) => {
                         console.log('❌ SpaceDetail gallery image load error:', image);
-                        e.target.style.display = 'none';
+                        e.target.style.opacity = '0.5';
+                        e.target.onerror = null;
+                      }}
+                      onLoad={() => {
+                        console.log('✅ SpaceDetail gallery image loaded:', image);
                       }}
                     />
                   ))}

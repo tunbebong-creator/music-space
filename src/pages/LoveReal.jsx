@@ -818,14 +818,15 @@ export default function LoveReal() {
                     <div className="h-48 bg-gradient-to-br from-blue-400 to-purple-500 relative">
                       {space.images && space.images.length > 0 ? (
                         <img 
-                          src={`http://localhost:3001${space.images[0]}`} 
+                          src={getUploadUrl(space.images[0])} 
                           alt={space.name}
                           className="w-full h-full object-cover"
+                          loading="lazy"
                           onLoad={() => console.log('✅ Space image loaded:', space.images[0])}
                           onError={(e) => {
                             console.log('❌ Space image load error:', space.images[0]);
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
+                            e.target.style.opacity = '0.5';
+                            e.target.onerror = null;
                           }}
                         />
                       ) : null}

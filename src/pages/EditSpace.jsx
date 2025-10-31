@@ -14,6 +14,7 @@ import {
   Settings,
   Camera
 } from "lucide-react";
+import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
 export default function EditSpace() {
   const navigate = useNavigate();
@@ -43,12 +44,13 @@ export default function EditSpace() {
   React.useEffect(() => {
     const loadSpaceData = async () => {
       try {
-        const token = localStorage.getItem('adminToken');
+        const token = localStorage.getItem('auth_token');
         if (!token) {
           throw new Error('No admin token found. Please login as admin.');
         }
 
-        const response = await fetch(`http://localhost:3001/api/admin/spaces/${id}`, {
+        const apiBase = API_BASE_URL.replace('/api', '');
+        const response = await fetch(`${apiBase}/api/admin/spaces/${id}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -92,15 +94,21 @@ export default function EditSpace() {
   }, [id, navigate]);
 
   // Upload image function
-  const uploadImage = async (file, type = 'general') => {
+  const uploadImage = async (file, type = 'spaces') => {
     try {
       const formData = new FormData();
       formData.append('image', file);
       formData.append('type', type);
       
-      const response = await fetch('http://localhost:3001/api/upload', {
+      const token = localStorage.getItem('auth_token');
+      const apiBase = API_BASE_URL.replace('/api', '');
+      
+      const response = await fetch(`${apiBase}/api/upload`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       if (!response.ok) {
@@ -108,6 +116,7 @@ export default function EditSpace() {
       }
       
       const result = await response.json();
+      // Return relative URL (not full URL) for consistency
       return result.url;
     } catch (error) {
       console.error('Upload error:', error);
@@ -156,7 +165,7 @@ export default function EditSpace() {
       };
 
       // Get token
-      const token = localStorage.getItem('adminToken');
+      const token = localStorage.getItem('auth_token');
       if (!token) {
         throw new Error('No admin token found. Please login as admin.');
       }
@@ -164,7 +173,8 @@ export default function EditSpace() {
       console.log('🔍 Debug - Token:', token);
       console.log('🔍 Debug - Space data:', spaceData);
       
-      const response = await fetch(`http://localhost:3001/api/admin/spaces/${id}`, {
+      const apiBase = API_BASE_URL.replace('/api', '');
+      const response = await fetch(`${apiBase}/api/admin/spaces/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -503,7 +513,7 @@ export default function EditSpace() {
                 {spaceImages.map((image, index) => (
                   <div key={index} className="relative group">
                     <img 
-                      src={image.startsWith('http') ? image : `http://localhost:3001${image}`} 
+                      src={getUploadUrl(image)} 
                       alt={`Space ${index + 1}`}
                       className="w-full h-32 object-cover rounded-lg shadow-sm"
                     />
