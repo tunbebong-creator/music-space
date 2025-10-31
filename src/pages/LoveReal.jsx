@@ -8,6 +8,7 @@ import { getUploadUrl, API_BASE_URL } from "@/config/api.js";
 export default function LoveReal() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = React.useState("events");
+  const [eventTimeFilter, setEventTimeFilter] = React.useState("upcoming"); // "upcoming" or "past"
   const [searchQuery, setSearchQuery] = React.useState("");
   const [userLocation, setUserLocation] = React.useState(null);
   const [nearbyResults, setNearbyResults] = React.useState({ spaces: [], events: [] });
@@ -426,18 +427,66 @@ export default function LoveReal() {
   }, [spaces, searchQuery, nearbyResults.spaces]);
 
   const filteredEvents = React.useMemo(() => {
+    let result = events;
+    
+    // Filter by time (upcoming vs past)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+    
+    if (eventTimeFilter === "upcoming") {
+      // Show upcoming events (event_date >= today) or events without date
+      result = result.filter(event => {
+        if (!event.event_date) return true; // Show events without date
+        const eventDate = new Date(event.event_date);
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate >= today;
+      });
+    } else if (eventTimeFilter === "past") {
+      // Show past events (event_date < today)
+      result = result.filter(event => {
+        if (!event.event_date) return false; // Hide events without date in past view
+        const eventDate = new Date(event.event_date);
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate < today;
+      });
+      
+      // Sort past events by date (newest first)
+      result = result.sort((a, b) => {
+        const dateA = new Date(a.event_date);
+        const dateB = new Date(b.event_date);
+        return dateB - dateA; // Newest first
+      });
+    }
+    
     // If we have nearby results and no search query, show nearby results
     if (nearbyResults.events.length > 0 && !searchQuery) {
-      return nearbyResults.events;
+      const nearbyFiltered = nearbyResults.events.filter(event => {
+        if (eventTimeFilter === "upcoming") {
+          if (!event.event_date) return true;
+          const eventDate = new Date(event.event_date);
+          eventDate.setHours(0, 0, 0, 0);
+          return eventDate >= today;
+        } else {
+          if (!event.event_date) return false;
+          const eventDate = new Date(event.event_date);
+          eventDate.setHours(0, 0, 0, 0);
+          return eventDate < today;
+        }
+      });
+      if (nearbyFiltered.length > 0) {
+        return eventTimeFilter === "past" 
+          ? nearbyFiltered.sort((a, b) => new Date(b.event_date) - new Date(a.event_date))
+          : nearbyFiltered;
+      }
     }
     
     // Otherwise filter by search query
-    return events.filter(event =>
+    return result.filter(event =>
       event.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.venue_name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [events, searchQuery, nearbyResults.events]);
+  }, [events, searchQuery, nearbyResults.events, eventTimeFilter]);
 
   if (spacesLoading || eventsLoading) {
     return (
@@ -609,12 +658,53 @@ export default function LoveReal() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 1.2 }}>
+            {/* Event Time Filter Buttons */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 1.3 }}
+              className="flex justify-center mb-6">
+              <div className="bg-white/80 backdrop-blur-md rounded-full p-2 shadow-lg border border-sky-200/50 inline-flex">
+                <motion.button
+                  onClick={() => setEventTimeFilter("upcoming")}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`px-6 py-2 rounded-full font-semibold transition-all duration-300 ${
+                    eventTimeFilter === "upcoming"
+                      ? "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg"
+                      : "text-gray-600 hover:text-sky-500 hover:bg-sky-50/50"
+                  }`}
+                >
+                  Sắp tới
+                </motion.button>
+                <motion.button
+                  onClick={() => setEventTimeFilter("past")}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`px-6 py-2 rounded-full font-semibold transition-all duration-300 ${
+                    eventTimeFilter === "past"
+                      ? "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg"
+                      : "text-gray-600 hover:text-sky-500 hover:bg-sky-50/50"
+                  }`}
+                >
+                  Đã qua ({filteredEvents.filter(e => {
+                    if (!e.event_date) return false;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const eventDate = new Date(e.event_date);
+                    eventDate.setHours(0, 0, 0, 0);
+                    return eventDate < today;
+                  }).length})
+                </motion.button>
+              </div>
+            </motion.div>
+            
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 1.4 }}
               className="text-3xl font-bold text-center mb-8 text-gray-800">
-              Sự Kiện Âm Nhạc
+              {eventTimeFilter === "upcoming" ? "Sự Kiện Sắp Tới" : "Các Sự Kiện Đã Qua"}
             </motion.h2>
             
             {filteredEvents.length === 0 ? (
