@@ -14,6 +14,7 @@ import {
   Settings,
   Camera
 } from "lucide-react";
+import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
 export default function AddSpace() {
   const navigate = useNavigate();
@@ -112,7 +113,8 @@ export default function AddSpace() {
       console.log('🔍 Debug - Token:', token);
       console.log('🔍 Debug - Space data:', spaceData);
       
-      const response = await fetch('http://localhost:3001/api/admin/spaces', {
+      const apiBase = API_BASE_URL.replace('/api', '');
+      const response = await fetch(`${apiBase}/api/admin/spaces`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -452,9 +454,13 @@ export default function AddSpace() {
                 {spaceImages.map((image, index) => (
                   <div key={index} className="relative group">
                     <img 
-                      src={`http://localhost:3001${image}`} 
+                      src={getUploadUrl(image)} 
                       alt={`Space ${index + 1}`}
                       className="w-full h-32 object-cover rounded-lg shadow-sm"
+                      onError={(e) => {
+                        console.error('AddSpace image error:', image);
+                        e.target.style.opacity = '0.5';
+                      }}
                     />
                     <button
                       type="button"

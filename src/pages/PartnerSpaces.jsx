@@ -18,6 +18,7 @@ import {
   Filter
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { API_BASE_URL, getUploadUrl } from '@/config/api.js';
 
 export default function PartnerSpaces() {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ export default function PartnerSpaces() {
   const { data: spaces = [], isLoading } = useQuery({
     queryKey: ['partner-spaces'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3001/api/spaces');
+      const response = await fetch(`${API_BASE_URL}/spaces`);
       if (!response.ok) throw new Error('Failed to fetch spaces');
       const data = await response.json();
       return data.spaces || [];
