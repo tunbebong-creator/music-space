@@ -4127,6 +4127,24 @@ app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
   }
 });
 
+// Self-ping to keep server awake (only in production)
+if (process.env.NODE_ENV === 'production') {
+  const SELF_PING_URL = process.env.SELF_PING_URL || 'https://music-space-server.onrender.com';
+  const PING_INTERVAL = 14 * 60 * 1000; // 14 minutes (Render free tier sleeps after 15 min inactivity)
+  
+  setInterval(async () => {
+    try {
+      const response = await fetch(`${SELF_PING_URL}/api/health`);
+      const data = await response.json();
+      console.log(`✅ Self-ping successful: ${data.status}`);
+    } catch (error) {
+      console.warn(`⚠️ Self-ping failed: ${error.message}`);
+    }
+  }, PING_INTERVAL);
+  
+  console.log(`🔄 Self-ping enabled: ${SELF_PING_URL}/api/health every ${PING_INTERVAL / 1000 / 60} minutes`);
+}
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
