@@ -3475,6 +3475,15 @@ app.get('/api/artist/events', authenticateToken, async (req, res) => {
       registrationSelect
     });
     
+    // First check total events count (all statuses for debugging)
+    const allEventsCheck = await pool.query(`
+      SELECT COUNT(*) as total, 
+             COUNT(*) FILTER (WHERE status = 'approved') as approved_count,
+             COUNT(*) FILTER (WHERE status = 'approved' AND (event_date IS NULL OR event_date >= CURRENT_DATE)) as upcoming_approved_count
+      FROM events
+    `);
+    console.log('📊 Events stats:', allEventsCheck.rows[0]);
+    
     const result = await pool.query(`
       SELECT e.*, 
              s.name as space_name, 
@@ -3492,6 +3501,8 @@ app.get('/api/artist/events', authenticateToken, async (req, res) => {
       ORDER BY COALESCE(e.event_date, '2099-12-31'::date) ASC
       LIMIT $2 OFFSET $3
     `, [req.user.id, parseInt(limit), offset]);
+    
+    console.log(`✅ Found ${result.rows.length} events for artist`);
     
     // Get total count
     const countResult = await pool.query(`

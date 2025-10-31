@@ -111,9 +111,17 @@ export default function ArtistDashboard() {
   // Fetch upcoming events
   const { data: eventsData, isLoading: eventsLoading, error: eventsError, refetch: refetchEvents } = useQuery({
     queryKey: ['artist-events', user?.id],
-    queryFn: () => fetchWithAuth('/artist/events'),
+    queryFn: async () => {
+      console.log('🔍 Fetching artist events...');
+      const data = await fetchWithAuth('/artist/events');
+      console.log('✅ Artist events response:', data);
+      return data;
+    },
     enabled: !!user && activeTab === 'events',
     retry: 2,
+    onError: (error) => {
+      console.error('❌ Error fetching artist events:', error);
+    },
   });
 
   // Fetch registrations
@@ -427,6 +435,15 @@ export default function ArtistDashboard() {
                 <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500">Chưa có event nào sắp tới</p>
                 <p className="text-sm text-gray-400 mt-2">Các events sẽ hiển thị ở đây khi được approved</p>
+                {eventsError && (
+                  <p className="text-xs text-red-400 mt-2">Lỗi: {eventsError.message}</p>
+                )}
+                <button
+                  onClick={() => refetchEvents()}
+                  className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                >
+                  Tải lại
+                </button>
               </div>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
