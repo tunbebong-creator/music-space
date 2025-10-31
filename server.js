@@ -587,6 +587,28 @@ app.get('/api/blog-posts', async (req, res) => {
       }
     }
     
+    // Helper function to normalize URLs - convert full URLs to relative URLs
+    const normalizeUrl = (url) => {
+      if (!url || typeof url !== 'string') return url;
+      // If it's already a relative URL, return as-is
+      if (url.startsWith('/uploads/')) return url;
+      // If it's a full URL, extract the path
+      try {
+        const urlObj = new URL(url);
+        if (urlObj.pathname.startsWith('/uploads/')) {
+          return urlObj.pathname;
+        }
+      } catch {
+        // Not a valid URL, might be relative already
+        if (url.startsWith('/')) return url;
+      }
+      // If it doesn't start with /, assume it's a relative path and add /uploads/
+      if (!url.startsWith('/')) {
+        return `/uploads/general/${url}`;
+      }
+      return url;
+    };
+    
     // Process posts
     const posts = result.rows.map(post => {
       // Parse media_urls if it's a JSON string
@@ -606,9 +628,15 @@ app.get('/api/blog-posts', async (req, res) => {
         }
       }
       
+      // Normalize all URLs to relative format
+      mediaUrls = mediaUrls.map(url => normalizeUrl(url)).filter(Boolean);
+      
+      // Normalize image_url
+      const normalizedImageUrl = post.image_url ? normalizeUrl(post.image_url) : null;
+      
       // Add image_url to mediaUrls if it exists and not already included
-      if (post.image_url && !mediaUrls.includes(post.image_url)) {
-        mediaUrls = [post.image_url, ...mediaUrls];
+      if (normalizedImageUrl && !mediaUrls.includes(normalizedImageUrl)) {
+        mediaUrls = [normalizedImageUrl, ...mediaUrls];
       }
       
       // Get user info if user_id exists
@@ -620,7 +648,7 @@ app.get('/api/blog-posts', async (req, res) => {
         likes: post.likes || 0,
         comment_count: post.comment_count || 0,
         media_urls: mediaUrls,
-        image_url: post.image_url || null, // Ensure image_url is included
+        image_url: normalizedImageUrl, // Normalized relative URL
         created_by: createdBy,
         user_email: userEmail
       };
