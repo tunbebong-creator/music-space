@@ -232,12 +232,28 @@ export default function WeArticle() {
   const { data: post, isLoading, error } = useQuery({
     queryKey: ['blog-post', postId],
     queryFn: async () => {
+      console.log('🔍 WeArticle - Fetching post with ID:', postId);
       const posts = await customAPI.entities.BlogPost.find();
-      const found = posts.find(p => p.id === postId);
+      console.log('📋 WeArticle - All posts:', posts);
+      const found = posts.find(p => p.id === postId || String(p.id) === String(postId));
+      console.log('✅ WeArticle - Found post:', found);
       if (!found) throw new Error("Không tìm thấy bài viết");
+      
+      // Log post media info
+      console.log('📸 WeArticle - Post media info:', {
+        id: found.id,
+        title: found.title,
+        image_url: found.image_url,
+        media_urls: found.media_urls,
+        media_urls_type: typeof found.media_urls
+      });
+      
       return found;
     },
-    enabled: !!postId
+    enabled: !!postId,
+    onError: (error) => {
+      console.error('❌ WeArticle - Error fetching post:', error);
+    }
   });
 
   // Fetch reactions
@@ -763,6 +779,14 @@ export default function WeArticle() {
             className="mb-12 rounded-2xl overflow-hidden shadow-xl"
           >
             {(() => {
+              console.log('📸 WeArticle - Post data:', {
+                id: post.id,
+                title: post.title,
+                image_url: post.image_url,
+                media_urls: post.media_urls,
+                media_urls_type: typeof post.media_urls
+              });
+              
               // Parse media_urls if it's a string
               let mediaUrls = [];
               if (post.media_urls) {
@@ -770,25 +794,37 @@ export default function WeArticle() {
                   try {
                     mediaUrls = JSON.parse(post.media_urls);
                   } catch {
-                    mediaUrls = [];
+                    // If parsing fails, try treating as single URL
+                    if (post.media_urls.trim()) {
+                      mediaUrls = [post.media_urls];
+                    }
                   }
                 } else if (Array.isArray(post.media_urls)) {
                   mediaUrls = post.media_urls;
                 }
               }
               
-              // Add image_url to mediaUrls if exists
+              // Add image_url to mediaUrls if exists and not already included
               if (post.image_url && !mediaUrls.includes(post.image_url)) {
                 mediaUrls = [post.image_url, ...mediaUrls];
               }
               
+              console.log('📸 WeArticle - Parsed mediaUrls:', mediaUrls);
+              
               // Ensure URLs are full URLs using getUploadUrl
               mediaUrls = mediaUrls.map(url => {
-                if (!url) return null;
-                return getUploadUrl(url);
+                if (!url || !url.trim()) return null;
+                const fullUrl = getUploadUrl(url.trim());
+                console.log(`🖼️ WeArticle - Processing URL: ${url} -> ${fullUrl}`);
+                return fullUrl;
               }).filter(Boolean);
               
-              if (mediaUrls.length === 0) return null;
+              console.log('📸 WeArticle - Final mediaUrls:', mediaUrls);
+              
+              if (mediaUrls.length === 0) {
+                console.warn(`⚠️ WeArticle - No media found for post ${post.id}`);
+                return null;
+              }
               
               return (
                 <div className="space-y-2">
@@ -815,9 +851,15 @@ export default function WeArticle() {
                               src={mediaUrl}
                               alt={`${post.title} - ${idx + 1}`}
                               className="w-full h-auto object-cover rounded-lg transition-transform group-hover:scale-105"
+                              loading="lazy"
                               onError={(e) => {
-                                console.error('Image load error:', mediaUrl);
-                                e.target.style.display = 'none';
+                                console.error('❌ WeArticle - Image load error:', mediaUrl);
+                                // Don't hide on error, show placeholder instead
+                                e.target.style.opacity = '0.5';
+                                e.target.onerror = null; // Prevent infinite loop
+                              }}
+                              onLoad={() => {
+                                console.log(`✅ WeArticle - Image loaded successfully: ${mediaUrl}`);
                               }}
                             />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
