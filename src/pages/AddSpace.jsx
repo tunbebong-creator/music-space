@@ -40,15 +40,21 @@ export default function AddSpace() {
 
 
   // Upload image function
-  const uploadImage = async (file, type = 'general') => {
+  const uploadImage = async (file, type = 'spaces') => {
     try {
       const formData = new FormData();
       formData.append('image', file);
       formData.append('type', type);
       
-      const response = await fetch('http://localhost:3001/api/upload', {
+      const token = localStorage.getItem('auth_token');
+      const apiBase = API_BASE_URL.replace('/api', '');
+      
+      const response = await fetch(`${apiBase}/api/upload`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       if (!response.ok) {
@@ -56,6 +62,7 @@ export default function AddSpace() {
       }
       
       const result = await response.json();
+      // Return relative URL for consistency
       return result.url;
     } catch (error) {
       console.error('Upload error:', error);
@@ -68,7 +75,7 @@ export default function AddSpace() {
     const files = e.target.files;
     if (files.length > 0) {
       setUploadingImages(true);
-      const uploadPromises = Array.from(files).map(file => uploadImage(file, 'general'));
+      const uploadPromises = Array.from(files).map(file => uploadImage(file, 'spaces'));
       const urls = await Promise.all(uploadPromises);
       const validUrls = urls.filter(url => url !== null);
       if (validUrls.length > 0) {
