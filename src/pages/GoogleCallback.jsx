@@ -45,8 +45,8 @@ export default function GoogleCallback() {
           localStorage.setItem('auth_token', data.token);
           localStorage.setItem('user_data', JSON.stringify(data.user));
           
-          // Redirect to user page
-          window.location.href = '/You';
+          // Redirect to homepage
+          window.location.href = '/';
         } else {
           // For now, create mock user data if backend fails
           const mockUserData = {
@@ -62,8 +62,8 @@ export default function GoogleCallback() {
           localStorage.setItem('auth_token', token);
           localStorage.setItem('user_data', JSON.stringify(mockUserData));
           
-          // Redirect to user page
-          window.location.href = '/You';
+          // Redirect to homepage
+          window.location.href = '/';
         }
       } catch (error) {
         console.error('Google callback error:', error);

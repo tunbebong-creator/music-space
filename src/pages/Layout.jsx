@@ -176,8 +176,8 @@ export default function Layout({ children, currentPageName }) {
   const handleAuthSuccess = (userData) => {
     setUser(userData);
     setAuthModalOpen(false);
-    // Redirect to user's page after successful login
-    window.location.href = createPageUrl("You");
+    // Redirect to homepage after successful login
+    window.location.href = '/';
   };
 
 
