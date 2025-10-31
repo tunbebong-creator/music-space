@@ -11,9 +11,29 @@ export const getApiUrl = (endpoint) => {
 
 // Helper function to get upload URL
 export const getUploadUrl = (path) => {
-  if (!path) return '';
-  if (path.startsWith('http')) return path;
-  if (path.startsWith('/uploads/')) return `${API_UPLOAD_BASE}${path}`;
-  return `${API_UPLOAD_BASE}/uploads/${path}`;
+  if (!path) {
+    console.warn('⚠️ getUploadUrl: Empty path provided');
+    return '';
+  }
+  
+  const trimmedPath = path.trim();
+  
+  // Already a full URL
+  if (trimmedPath.startsWith('http://') || trimmedPath.startsWith('https://')) {
+    console.log(`✅ getUploadUrl: Already full URL: ${trimmedPath}`);
+    return trimmedPath;
+  }
+  
+  // Path starts with /uploads/
+  if (trimmedPath.startsWith('/uploads/')) {
+    const fullUrl = `${API_UPLOAD_BASE}${trimmedPath}`;
+    console.log(`✅ getUploadUrl: /uploads/ path -> ${fullUrl}`);
+    return fullUrl;
+  }
+  
+  // Path doesn't start with /uploads/ - add it
+  const fullUrl = `${API_UPLOAD_BASE}/uploads/${trimmedPath}`;
+  console.log(`✅ getUploadUrl: Relative path "${trimmedPath}" -> ${fullUrl}`);
+  return fullUrl;
 };
 

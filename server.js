@@ -115,6 +115,32 @@ app.get('/', (req, res) => {
   });
 });
 
+// Debug endpoint to test image URLs
+app.get('/api/debug/image-url', (req, res) => {
+  const { url } = req.query;
+  if (!url) {
+    return res.status(400).json({ error: 'URL parameter required' });
+  }
+  
+  // Check if URL is accessible
+  const fullPath = url.startsWith('/uploads/') 
+    ? path.join(uploadsAbsolutePath, url.replace('/uploads/', ''))
+    : path.join(uploadsAbsolutePath, url);
+  
+  const exists = fs.existsSync(fullPath);
+  const stats = exists ? fs.statSync(fullPath) : null;
+  
+  res.json({
+    original_url: url,
+    full_path: fullPath,
+    exists,
+    is_file: stats?.isFile(),
+    size: stats?.size,
+    uploads_base: API_UPLOAD_BASE || 'https://music-space-server.onrender.com',
+    resolved_url: url.startsWith('http') ? url : `${API_UPLOAD_BASE || 'https://music-space-server.onrender.com'}${url.startsWith('/') ? url : '/' + url}`
+  });
+});
+
 // Debug: check uploads existence
 app.get('/api/debug/uploads', (req, res) => {
   try {
