@@ -1,27 +1,24 @@
 // API Configuration
 // Use environment variable or default to Render backend URL
-const defaultApiUrl = 'https://music-space-server.onrender.com/api';
-const defaultUploadBase = 'https://music-space-server.onrender.com';
+// NOTE: Backend is actually running on usic-space-server.onrender.com (without 'm')
+const defaultApiUrl = 'https://usic-space-server.onrender.com/api';
+const defaultUploadBase = 'https://usic-space-server.onrender.com';
 
-// Check for common typos in environment variable and fix automatically
+// Use environment variable if provided, otherwise use default
 let envApiUrl = import.meta.env.VITE_API_URL;
-if (envApiUrl && envApiUrl.includes('usic-space-server')) {
-  console.error('❌ ERROR: VITE_API_URL contains typo "usic-space-server" (missing "m"). Auto-fixing...');
-  // Auto-fix the typo
-  envApiUrl = envApiUrl.replace('usic-space-server', 'music-space-server');
-  console.warn('✅ Fixed URL:', envApiUrl);
-}
 
-// Calculate base URLs - always use correct URL even if env var has typo
-let calculatedApiUrl = defaultApiUrl;
-let calculatedUploadBase = defaultUploadBase;
+// Calculate base URLs
+let calculatedApiUrl = envApiUrl || defaultApiUrl;
+let calculatedUploadBase = envApiUrl 
+  ? envApiUrl.replace('/api', '') 
+  : defaultUploadBase;
 
-if (envApiUrl && !envApiUrl.includes('usic-space-server')) {
-  calculatedApiUrl = envApiUrl;
-  calculatedUploadBase = envApiUrl.replace('/api', '');
-} else {
-  // Force use default if env var is wrong or missing
-  console.warn('⚠️ Using default API URL because VITE_API_URL is incorrect or missing');
+// Normalize URL - handle both music-space and usic-space
+if (calculatedApiUrl.includes('music-space-server')) {
+  // If env var has 'music-space', but backend is actually 'usic-space', fix it
+  calculatedApiUrl = calculatedApiUrl.replace('music-space-server', 'usic-space-server');
+  calculatedUploadBase = calculatedUploadBase.replace('music-space-server', 'usic-space-server');
+  console.warn('⚠️ Fixed URL to match actual backend: usic-space-server.onrender.com');
 }
 
 // Export the corrected URLs

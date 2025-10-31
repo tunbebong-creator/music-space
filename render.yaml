@@ -32,7 +32,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://music-space-server.onrender.com/api
+        value: https://usic-space-server.onrender.com/api
 
   # Cron job to keep services awake (ping every 5 minutes)
   - type: cron
@@ -43,7 +43,7 @@ services:
     startCommand: node keep-awake.js
     envVars:
       - key: BACKEND_URL
-        value: https://music-space-server.onrender.com
+        value: https://usic-space-server.onrender.com
       - key: FRONTEND_URL
         value: https://music-space-frontend.onrender.com
 

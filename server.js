@@ -122,7 +122,7 @@ app.get('/api/debug/image-url', (req, res) => {
     return res.status(400).json({ error: 'URL parameter required' });
   }
   
-  const SERVER_BASE = process.env.SERVER_BASE_URL || 'https://music-space-server.onrender.com';
+  const SERVER_BASE = process.env.SERVER_BASE_URL || 'https://usic-space-server.onrender.com';
   
   // Check if URL is accessible
   const fullPath = url.startsWith('/uploads/') 
@@ -4231,7 +4231,7 @@ app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
 
 // Self-ping to keep server awake (only in production)
 if (process.env.NODE_ENV === 'production') {
-  const SELF_PING_URL = process.env.SELF_PING_URL || 'https://music-space-server.onrender.com';
+  const SELF_PING_URL = process.env.SELF_PING_URL || 'https://usic-space-server.onrender.com';
   const PING_INTERVAL = 14 * 60 * 1000; // 14 minutes (Render free tier sleeps after 15 min inactivity)
   
   setInterval(async () => {
