@@ -1,23 +1,38 @@
 // API Configuration
 // Use environment variable or default to Render backend URL
-let defaultApiUrl = 'https://music-space-server.onrender.com/api';
-let defaultUploadBase = 'https://music-space-server.onrender.com';
+const defaultApiUrl = 'https://music-space-server.onrender.com/api';
+const defaultUploadBase = 'https://music-space-server.onrender.com';
 
-// Check for common typos in environment variable
-const envApiUrl = import.meta.env.VITE_API_URL;
+// Check for common typos in environment variable and fix automatically
+let envApiUrl = import.meta.env.VITE_API_URL;
 if (envApiUrl && envApiUrl.includes('usic-space-server')) {
-  console.error('❌ ERROR: VITE_API_URL contains typo "usic-space-server" (missing "m"). Please update on Render to "music-space-server"');
+  console.error('❌ ERROR: VITE_API_URL contains typo "usic-space-server" (missing "m"). Auto-fixing...');
+  // Auto-fix the typo
+  envApiUrl = envApiUrl.replace('usic-space-server', 'music-space-server');
+  console.warn('✅ Fixed URL:', envApiUrl);
 }
 
-export const API_BASE_URL = envApiUrl || defaultApiUrl;
-export const API_UPLOAD_BASE = envApiUrl?.replace('/api', '') || defaultUploadBase;
+// Calculate base URLs - always use correct URL even if env var has typo
+let calculatedApiUrl = defaultApiUrl;
+let calculatedUploadBase = defaultUploadBase;
 
-// Validate URLs don't contain typos
+if (envApiUrl && !envApiUrl.includes('usic-space-server')) {
+  calculatedApiUrl = envApiUrl;
+  calculatedUploadBase = envApiUrl.replace('/api', '');
+} else {
+  // Force use default if env var is wrong or missing
+  console.warn('⚠️ Using default API URL because VITE_API_URL is incorrect or missing');
+}
+
+// Export the corrected URLs
+export const API_BASE_URL = calculatedApiUrl;
+export const API_UPLOAD_BASE = calculatedUploadBase;
+
+// Final validation warning
 if (API_BASE_URL.includes('usic-space-server') || API_UPLOAD_BASE.includes('usic-space-server')) {
-  console.error('❌ CRITICAL: API URLs contain typo "usic-space-server". Images will fail to load!');
+  console.error('❌ CRITICAL: API URLs still contain typo after fix. This should not happen!');
   console.error('Current API_BASE_URL:', API_BASE_URL);
   console.error('Current API_UPLOAD_BASE:', API_UPLOAD_BASE);
-  console.error('Please update VITE_API_URL on Render to: https://music-space-server.onrender.com/api');
 }
 
 // Helper function to get full URL
