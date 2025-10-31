@@ -1,7 +1,24 @@
 // API Configuration
 // Use environment variable or default to Render backend URL
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://music-space-server.onrender.com/api';
-export const API_UPLOAD_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://music-space-server.onrender.com';
+let defaultApiUrl = 'https://music-space-server.onrender.com/api';
+let defaultUploadBase = 'https://music-space-server.onrender.com';
+
+// Check for common typos in environment variable
+const envApiUrl = import.meta.env.VITE_API_URL;
+if (envApiUrl && envApiUrl.includes('usic-space-server')) {
+  console.error('❌ ERROR: VITE_API_URL contains typo "usic-space-server" (missing "m"). Please update on Render to "music-space-server"');
+}
+
+export const API_BASE_URL = envApiUrl || defaultApiUrl;
+export const API_UPLOAD_BASE = envApiUrl?.replace('/api', '') || defaultUploadBase;
+
+// Validate URLs don't contain typos
+if (API_BASE_URL.includes('usic-space-server') || API_UPLOAD_BASE.includes('usic-space-server')) {
+  console.error('❌ CRITICAL: API URLs contain typo "usic-space-server". Images will fail to load!');
+  console.error('Current API_BASE_URL:', API_BASE_URL);
+  console.error('Current API_UPLOAD_BASE:', API_UPLOAD_BASE);
+  console.error('Please update VITE_API_URL on Render to: https://music-space-server.onrender.com/api');
+}
 
 // Helper function to get full URL
 export const getApiUrl = (endpoint) => {
