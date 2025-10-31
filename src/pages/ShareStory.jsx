@@ -40,6 +40,64 @@ export default function ShareStory() {
     }
   }, [navigate]);
 
+  // Compress image for mobile to reduce upload time
+  const compressImage = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.8) => {
+    return new Promise((resolve) => {
+      // If not an image or already small, return as-is
+      if (!file.type.startsWith('image/') || file.size < 500 * 1024) {
+        resolve(file);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Calculate new dimensions
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
+            } else {
+              width = (width * maxHeight) / height;
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: file.type,
+                  lastModified: Date.now()
+                });
+                console.log(`📸 Compressed: ${(file.size / 1024).toFixed(0)}KB -> ${(blob.size / 1024).toFixed(0)}KB`);
+                resolve(compressedFile);
+              } else {
+                resolve(file);
+              }
+            },
+            file.type,
+            quality
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileUpload = async (files) => {
     if (!files || files.length === 0) return;
     
@@ -48,14 +106,22 @@ export default function ShareStory() {
     
     try {
       for (const file of Array.from(files)) {
-        // Check file size (100MB limit)
-        if (file.size > 100 * 1024 * 1024) {
-          alert(`File ${file.name} quá lớn (tối đa 100MB)`);
+        // Check file size (100MB limit for videos, 10MB for images)
+        const maxSize = file.type.startsWith('video/') ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+          alert(`File ${file.name} quá lớn (tối đa ${maxSize / 1024 / 1024}MB)`);
           continue;
         }
 
+        // Compress images on mobile before upload
+        let fileToUpload = file;
+        if (file.type.startsWith('image/')) {
+          console.log(`📸 Compressing image: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`);
+          fileToUpload = await compressImage(file);
+        }
+
         const formData = new FormData();
-        formData.append('image', file);
+        formData.append('image', fileToUpload);
         formData.append('type', 'general');
         
         const token = localStorage.getItem('auth_token');
@@ -100,10 +166,15 @@ export default function ShareStory() {
           
           const result = await response.json();
           console.log('✅ Upload successful:', result);
-          const fullUrl = getUploadUrl(result.url);
+          
+          // Store relative URL, not full URL - frontend will convert when displaying
+          // This ensures URLs work across all devices
+          const relativeUrl = result.url; // Should be like "/uploads/general/filename.jpg"
+          console.log('📸 Storing URL:', relativeUrl);
           
           uploadedUrls.push({
-            url: fullUrl,
+            url: relativeUrl, // Store relative URL
+            fullUrl: getUploadUrl(relativeUrl), // Full URL for preview
             type: file.type.startsWith('video/') ? 'video' : 'image',
             file: file
           });
@@ -148,17 +219,24 @@ export default function ShareStory() {
     setLoading(true);
     
     try {
-      // Get first image URL if available
-      const imageUrl = formData.mediaFiles.find(m => m.type === 'image')?.url || formData.image_url || '';
+      // Get first image URL if available (use relative URL for storage)
+      const firstImage = formData.mediaFiles.find(m => m.type === 'image');
+      const imageUrl = firstImage?.url || formData.image_url || '';
       
+      // Store relative URLs in database (not full URLs) - frontend will convert when displaying
       const postData = {
         title: formData.title,
         content: formData.content,
         category: formData.category,
-        image_url: imageUrl,
-        media_urls: formData.mediaFiles.map(m => m.url),
+        image_url: imageUrl, // Relative URL like "/uploads/general/filename.jpg"
+        media_urls: formData.mediaFiles.map(m => m.url), // Array of relative URLs
         user_id: user.id
       };
+      
+      console.log('📝 Creating post with data:', {
+        ...postData,
+        media_urls_count: postData.media_urls.length
+      });
 
       await customAPI.entities.BlogPost.create(postData);
       
@@ -249,41 +327,49 @@ export default function ShareStory() {
             {/* Media Preview */}
             {formData.mediaFiles.length > 0 && (
               <div className="space-y-4">
-                {formData.mediaFiles.map((media, index) => (
-                  <div key={index} className="relative group border border-gray-200 rounded-xl overflow-hidden">
-                    {media.type === 'video' ? (
-                      <div className="relative">
-                        <video
-                          src={media.url}
-                          controls
-                          className="w-full max-h-96 object-contain bg-black"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeMedia(index)}
-                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        <img
-                          src={media.url}
-                          alt={`Upload ${index + 1}`}
-                          className="w-full max-h-96 object-contain bg-gray-50"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeMedia(index)}
-                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {formData.mediaFiles.map((media, index) => {
+                  // Use fullUrl for preview, url (relative) for saving
+                  const previewUrl = media.fullUrl || getUploadUrl(media.url);
+                  return (
+                    <div key={index} className="relative group border border-gray-200 rounded-xl overflow-hidden">
+                      {media.type === 'video' ? (
+                        <div className="relative">
+                          <video
+                            src={previewUrl}
+                            controls
+                            className="w-full max-h-96 object-contain bg-black"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeMedia(index)}
+                            className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <img
+                            src={previewUrl}
+                            alt={`Upload ${index + 1}`}
+                            className="w-full max-h-96 object-contain bg-gray-50"
+                            onError={(e) => {
+                              console.error('Preview image error:', previewUrl);
+                              e.target.style.opacity = '0.5';
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeMedia(index)}
+                            className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
