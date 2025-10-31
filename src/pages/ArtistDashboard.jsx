@@ -25,7 +25,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 
-import { API_BASE_URL } from '@/config/api.js';
+import { API_BASE_URL, getUploadUrl } from '@/config/api.js';
 
 const API_BASE = API_BASE_URL;
 
@@ -113,6 +113,14 @@ export default function ArtistDashboard() {
     queryKey: ['artist-events', user?.id],
     queryFn: () => fetchWithAuth('/artist/events'),
     enabled: !!user && activeTab === 'events',
+    retry: 2,
+  });
+
+  // Fetch registrations
+  const { data: registrationsData, isLoading: registrationsLoading, refetch: refetchRegistrations } = useQuery({
+    queryKey: ['artist-registrations', user?.id],
+    queryFn: () => fetchWithAuth('/artist/registrations'),
+    enabled: !!user && activeTab === 'registrations',
     retry: 2,
   });
 
@@ -446,7 +454,7 @@ export default function ArtistDashboard() {
                   }
                   
                   const imageUrl = coverImage 
-                    ? (coverImage.startsWith('http') ? coverImage : `http://localhost:3001${coverImage}`)
+                    ? (coverImage.startsWith('http') ? coverImage : getUploadUrl(coverImage))
                     : null;
                   
                   return (

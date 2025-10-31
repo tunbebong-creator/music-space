@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ChatPanel from '@/components/ChatPanel';
+import { API_BASE_URL } from '@/config/api.js';
 
 export default function PartnerDashboard() {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ export default function PartnerDashboard() {
   const { data: spaces = [], isLoading: spacesLoading } = useQuery({
     queryKey: ['partner-spaces'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3001/api/spaces');
+      const response = await fetch(`${API_BASE_URL}/spaces`);
       if (!response.ok) throw new Error('Failed to fetch spaces');
       const data = await response.json();
       return data.spaces || [];
@@ -57,7 +58,7 @@ export default function PartnerDashboard() {
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ['partner-events'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3001/api/events');
+      const response = await fetch(`${API_BASE_URL}/events`);
       if (!response.ok) throw new Error('Failed to fetch events');
       const data = await response.json();
       return data.events || [];
@@ -70,7 +71,7 @@ export default function PartnerDashboard() {
     queryFn: async () => {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
       if (!token) return [];
-      const response = await fetch('http://localhost:3001/api/notifications', {
+      const response = await fetch(`${API_BASE_URL}/notifications`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) return [];
@@ -86,7 +87,7 @@ export default function PartnerDashboard() {
     queryFn: async () => {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
       if (!token) return { unread_count: 0 };
-      const response = await fetch('http://localhost:3001/api/messages/unread-count', {
+      const response = await fetch(`${API_BASE_URL}/messages/unread-count`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) return { unread_count: 0 };
@@ -121,7 +122,7 @@ export default function PartnerDashboard() {
     if (!token) return;
     
     try {
-      await fetch(`http://localhost:3001/api/notifications/${id}/read`, {
+      await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });
