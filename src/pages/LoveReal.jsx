@@ -687,14 +687,16 @@ export default function LoveReal() {
                       : "text-gray-600 hover:text-sky-500 hover:bg-sky-50/50"
                   }`}
                 >
-                  Đã qua ({filteredEvents.filter(e => {
-                    if (!e.event_date) return false;
+                  Đã qua ({(() => {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const eventDate = new Date(e.event_date);
-                    eventDate.setHours(0, 0, 0, 0);
-                    return eventDate < today;
-                  }).length})
+                    return events.filter(e => {
+                      if (!e.event_date) return false;
+                      const eventDate = new Date(e.event_date);
+                      eventDate.setHours(0, 0, 0, 0);
+                      return eventDate < today;
+                    }).length;
+                  })()})
                 </motion.button>
               </div>
             </motion.div>
