@@ -122,6 +122,8 @@ app.get('/api/debug/image-url', (req, res) => {
     return res.status(400).json({ error: 'URL parameter required' });
   }
   
+  const SERVER_BASE = process.env.SERVER_BASE_URL || 'https://music-space-server.onrender.com';
+  
   // Check if URL is accessible
   const fullPath = url.startsWith('/uploads/') 
     ? path.join(uploadsAbsolutePath, url.replace('/uploads/', ''))
@@ -136,8 +138,8 @@ app.get('/api/debug/image-url', (req, res) => {
     exists,
     is_file: stats?.isFile(),
     size: stats?.size,
-    uploads_base: API_UPLOAD_BASE || 'https://music-space-server.onrender.com',
-    resolved_url: url.startsWith('http') ? url : `${API_UPLOAD_BASE || 'https://music-space-server.onrender.com'}${url.startsWith('/') ? url : '/' + url}`
+    server_base: SERVER_BASE,
+    resolved_url: url.startsWith('http') ? url : `${SERVER_BASE}${url.startsWith('/') ? url : '/' + url}`
   });
 });
 
