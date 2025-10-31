@@ -379,8 +379,8 @@ export default function We() {
                     
                     // Ensure URLs are full URLs using getUploadUrl
                     mediaUrls = mediaUrls.map(url => {
-                      if (!url) return null;
-                      const fullUrl = getUploadUrl(url);
+                      if (!url || !url.trim()) return null;
+                      const fullUrl = getUploadUrl(url.trim());
                       console.log(`🖼️ Processing image URL: ${url} -> ${fullUrl}`);
                       return fullUrl;
                     }).filter(Boolean);
@@ -401,34 +401,44 @@ export default function We() {
                     const isVideo = firstMedia?.includes('/videos/') || firstMedia?.match(/\.(mp4|webm|ogg)$/i);
                     
                     return (
-                      <div className="w-full overflow-hidden relative bg-gray-100">
+                      <div className="w-full overflow-hidden relative bg-gray-100 min-h-[200px] sm:min-h-[250px] md:min-h-[300px]">
                         {isVideo ? (
                           <video
                             src={firstMedia}
-                            className="w-full h-auto max-h-96 object-cover group-hover:scale-105 transition-transform duration-700"
+                            className="w-full h-auto max-h-[200px] sm:max-h-[250px] md:max-h-96 object-cover group-hover:scale-105 transition-transform duration-700"
                             muted
                             playsInline
+                            onError={(e) => {
+                              console.error('Video load error:', firstMedia);
+                              e.target.style.display = 'none';
+                            }}
                           />
                         ) : (
                           <img
                             src={firstMedia}
                             alt={post.title}
-                            className="w-full h-auto max-h-96 object-cover group-hover:scale-105 transition-transform duration-700"
+                            className="w-full h-auto max-h-[200px] sm:max-h-[250px] md:max-h-96 object-cover group-hover:scale-105 transition-transform duration-700"
+                            loading="lazy"
                             onError={(e) => {
                               console.error('Image load error:', firstMedia);
-                              e.target.style.display = 'none';
+                              // Don't hide on error, show placeholder instead
+                              e.target.style.opacity = '0.5';
+                              e.target.onerror = null; // Prevent infinite loop
+                            }}
+                            onLoad={() => {
+                              console.log(`✅ Image loaded successfully: ${firstMedia}`);
                             }}
                           />
                         )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                      <div className="absolute top-4 left-4">
-                        <span className="px-3 py-1 bg-white/90 backdrop-blur-sm text-sky-600 text-sm font-semibold rounded-full">
-                          {post.category}
-                        </span>
-                      </div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
+                        <div className="absolute top-2 left-2 sm:top-4 sm:left-4 pointer-events-auto">
+                          <span className="px-2 py-1 sm:px-3 sm:py-1 bg-white/90 backdrop-blur-sm text-sky-600 text-xs sm:text-sm font-semibold rounded-full">
+                            {post.category}
+                          </span>
+                        </div>
                         {mediaUrls.length > 1 && (
-                          <div className="absolute top-4 right-4">
-                            <span className="px-3 py-1 bg-black/50 backdrop-blur-sm text-white text-sm font-semibold rounded-full">
+                          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 pointer-events-auto">
+                            <span className="px-2 py-1 sm:px-3 sm:py-1 bg-black/50 backdrop-blur-sm text-white text-xs sm:text-sm font-semibold rounded-full">
                               +{mediaUrls.length - 1}
                             </span>
                           </div>
