@@ -13,6 +13,51 @@ import { vi } from "date-fns/locale";
 import { createPageUrl } from "@/utils";
 import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
+// Component để hiển thị ảnh với placeholder khi lỗi
+function PostMediaImage({ src, alt, isVideo, className, onImageClick }) {
+  const [imageError, setImageError] = React.useState(false);
+  
+  if (imageError) {
+    return (
+      <div className={`w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-sky-100 to-blue-100 rounded-lg ${className}`}>
+        <ImageIcon className="w-20 h-20 text-sky-300 mb-4" />
+        <p className="text-sky-500 text-base font-medium text-center">Không thể tải hình ảnh</p>
+      </div>
+    );
+  }
+  
+  if (isVideo) {
+    return (
+      <video
+        src={src}
+        controls
+        className={className}
+        onError={() => setImageError(true)}
+      />
+    );
+  }
+  
+  return (
+    <div className="relative group cursor-pointer" onClick={onImageClick}>
+      <img
+        src={src}
+        alt={alt}
+        className={className}
+        loading="lazy"
+        onError={() => {
+          setImageError(true);
+        }}
+        onLoad={() => setImageError(false)}
+      />
+      {onImageClick && (
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
+          <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Reactions component
 const ReactionsPanel = ({ postId, userReaction, onReactionChange }) => {
   const [showPanel, setShowPanel] = useState(false);
@@ -823,7 +868,12 @@ export default function WeArticle() {
               
               if (mediaUrls.length === 0) {
                 console.warn(`⚠️ WeArticle - No media found for post ${post.id}`);
-                return null;
+                return (
+                  <div className="w-full flex flex-col items-center justify-center p-12 bg-gradient-to-br from-sky-100 to-blue-100 rounded-lg min-h-[300px]">
+                    <ImageIcon className="w-24 h-24 text-sky-300 mb-4" />
+                    <p className="text-sky-500 text-lg font-medium text-center">Không có hình ảnh</p>
+                  </div>
+                );
               }
               
               return (
@@ -832,41 +882,21 @@ export default function WeArticle() {
                     const isVideo = mediaUrl?.includes('/videos/') || mediaUrl?.match(/\.(mp4|webm|ogg)$/i);
                     return (
                       <div key={idx} className="w-full">
-                        {isVideo ? (
-                          <video
-                            src={mediaUrl}
-                            controls
-                            className="w-full h-auto max-h-[600px] object-contain bg-black rounded-lg"
-                            onError={(e) => {
-                              console.error('Video load error:', mediaUrl);
-                              e.target.style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <div className="relative group cursor-pointer" onClick={() => {
-                            setSelectedImage(mediaUrl);
-                            setShowImageModal(true);
-                          }}>
-                            <img
-                              src={mediaUrl}
-                              alt={`${post.title} - ${idx + 1}`}
-                              className="w-full h-auto object-cover rounded-lg transition-transform group-hover:scale-105"
-                              loading="lazy"
-                              onError={(e) => {
-                                console.error('❌ WeArticle - Image load error:', mediaUrl);
-                                // Don't hide on error, show placeholder instead
-                                e.target.style.opacity = '0.5';
-                                e.target.onerror = null; // Prevent infinite loop
-                              }}
-                              onLoad={() => {
-                                console.log(`✅ WeArticle - Image loaded successfully: ${mediaUrl}`);
-                              }}
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
-                              <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </div>
-                        )}
+                        <PostMediaImage
+                          src={mediaUrl}
+                          alt={`${post.title} - ${idx + 1}`}
+                          isVideo={isVideo}
+                          className={isVideo 
+                            ? "w-full h-auto max-h-[600px] object-contain bg-black rounded-lg"
+                            : "w-full h-auto object-cover rounded-lg transition-transform group-hover:scale-105"
+                          }
+                          onImageClick={() => {
+                            if (!isVideo) {
+                              setSelectedImage(mediaUrl);
+                              setShowImageModal(true);
+                            }
+                          }}
+                        />
                       </div>
                     );
                   })}
