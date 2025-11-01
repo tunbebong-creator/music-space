@@ -1474,8 +1474,22 @@ app.get('/api/spaces/:id', async (req, res) => {
   }
 });
 
+// Middleware to conditionally use uploadMultipleImages only for multipart/form-data
+const optionalUploadMultipleImages = (req, res, next) => {
+  // Check Content-Type header
+  const contentType = req.headers['content-type'] || '';
+  
+  // If Content-Type is application/json, skip multer (body already parsed by express.json())
+  if (contentType.includes('application/json')) {
+    return next();
+  }
+  
+  // Otherwise use multer for multipart/form-data file uploads
+  uploadMultipleImages(req, res, next);
+};
+
 // Create new space
-app.post('/api/spaces', authenticateToken, requirePartnerOrAdmin, uploadMultipleImages, handleUploadError, async (req, res) => {
+app.post('/api/spaces', authenticateToken, requirePartnerOrAdmin, optionalUploadMultipleImages, handleUploadError, async (req, res) => {
   try {
     const { name, description, address, city, capacity, price_per_hour, amenities, equipment, rules, contact_name, contact_email, contact_phone, google_maps_url } = req.body;
     
