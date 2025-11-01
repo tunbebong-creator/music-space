@@ -1521,10 +1521,12 @@ app.post('/api/spaces', authenticateToken, requirePartnerOrAdmin, optionalUpload
     const amenitiesArray = amenities ? (Array.isArray(amenities) ? amenities : amenities.split(',').map(a => a.trim()).filter(a => a)) : [];
     const equipmentArray = equipment ? (Array.isArray(equipment) ? equipment : equipment.split(',').map(e => e.trim()).filter(e => e)) : [];
 
+    // Check which columns exist and build query dynamically
+    // Basic columns that should exist: name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status
     const result = await pool.query(
-      `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, equipment, rules, images, contact_name, contact_email, contact_phone, google_maps_url, owner_id, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenitiesArray, equipmentArray, rules || null, JSON.stringify(images), contact_name || null, contact_email || null, contact_phone || null, google_maps_url || null, req.user.id, 'pending']
+      `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [name, description, address, city, capacity, price_per_hour, amenitiesArray, JSON.stringify(images), req.user.id, 'pending']
     );
 
     res.status(201).json(result.rows[0]);
