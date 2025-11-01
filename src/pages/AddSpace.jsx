@@ -112,7 +112,7 @@ export default function AddSpace() {
       };
 
       // Get token
-      const token = localStorage.getItem('adminToken');
+      const token = localStorage.getItem('auth_token');
       if (!token) {
         throw new Error('No admin token found. Please login as admin.');
       }
