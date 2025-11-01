@@ -132,8 +132,7 @@ export default function We() {
     { value: "nhân văn", label: "Nhân văn", emoji: "📖" },
     { value: "sự kiện", label: "Sự kiện", emoji: "🎉" },
     { value: "câu chuyện", label: "Câu chuyện", emoji: "💭" },
-    { value: "cảm nhận", label: "Cảm nhận", emoji: "💙" },
-    { value: "câu hỏi chung", label: "Câu hỏi chung", emoji: "❓" }
+    { value: "cảm nhận", label: "Cảm nhận", emoji: "💙" }
   ];
 
   return (
@@ -655,7 +654,6 @@ function WriteModal({ isOpen, onClose, onSubmit }) {
                 <option value="câu chuyện">Câu chuyện</option>
                 <option value="nhân văn">Nhân văn</option>
                 <option value="sự kiện">Sự kiện</option>
-                <option value="câu hỏi chung">Câu hỏi chung</option>
               </select>
             </div>
 
