@@ -90,7 +90,7 @@ export default function EditSpace() {
       } catch (error) {
         console.error('Error loading space:', error);
         alert('Không thể tải dữ liệu space: ' + error.message);
-        navigate('/Admin');
+        navigate('/Admin', { replace: true });
       }
     };
 
@@ -203,7 +203,7 @@ export default function EditSpace() {
       const result = await response.json();
       console.log('🔍 Debug - Success response:', result);
       alert('Space đã được cập nhật thành công!');
-      navigate('/Admin');
+      navigate('/Admin', { replace: true });
     } catch (error) {
       console.error('Error updating space:', error);
       alert('Có lỗi xảy ra khi cập nhật space: ' + error.message);
@@ -219,7 +219,10 @@ export default function EditSpace() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <button 
-              onClick={() => navigate('/Admin')}
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('/Admin', { replace: true });
+              }}
               className="flex items-center text-white hover:text-blue-100 transition-colors"
             >
               <ArrowLeft className="w-5 h-5 mr-2" />
@@ -566,7 +569,7 @@ export default function EditSpace() {
           <div className="flex justify-end gap-4">
             <button
               type="button"
-              onClick={() => navigate('/Admin')}
+              onClick={() => navigate('/Admin', { replace: true })}
               className="px-8 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold"
             >
               Hủy
