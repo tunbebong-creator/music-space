@@ -345,6 +345,13 @@ export default function Layout({ children, currentPageName }) {
                           className="block px-4 py-3 text-sm text-gray-800 hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 font-medium">
                           🎵 Đăng ký làm Artist
                         </Link>
+                        <div className="border-t border-gray-50"></div>
+                        <Link
+                          to={createPageUrl("Contact")}
+                          onClick={() => setConsultDropdownOpen(false)}
+                          className="block px-4 py-3 text-sm text-gray-800 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200 font-medium">
+                          ❓ Câu hỏi chung
+                        </Link>
                       </div>
                     )}
                   </div>
@@ -426,6 +433,13 @@ export default function Layout({ children, currentPageName }) {
                           onClick={() => setConsultDropdownOpen(false)}
                           className="block px-4 py-3 text-sm text-gray-800 hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 font-medium">
                           🎵 Đăng ký làm Artist
+                        </Link>
+                        <div className="border-t border-gray-50"></div>
+                        <Link
+                          to={createPageUrl("Contact")}
+                          onClick={() => setConsultDropdownOpen(false)}
+                          className="block px-4 py-3 text-sm text-gray-800 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200 font-medium">
+                          ❓ Câu hỏi chung
                         </Link>
                       </div>
                     )}

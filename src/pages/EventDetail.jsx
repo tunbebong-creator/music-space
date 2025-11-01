@@ -94,6 +94,25 @@ export default function EventDetail() {
     return null;
   }, [event, drinkPrice, drinkItems]);
 
+  // Check if event has passed
+  const isEventPast = React.useMemo(() => {
+    if (!event || !event.event_date) return false;
+    
+    const now = new Date();
+    const eventDate = new Date(event.event_date);
+    
+    // If event has end_time, combine event_date and end_time to get exact end datetime
+    if (event.end_time) {
+      const [hours, minutes] = event.end_time.split(':').map(Number);
+      eventDate.setHours(hours || 23, minutes || 59, 59, 999);
+    } else {
+      // If no end_time, use end of event date
+      eventDate.setHours(23, 59, 59, 999);
+    }
+    
+    return now > eventDate;
+  }, [event]);
+
   // Keyboard navigation for gallery lightbox
   React.useEffect(() => {
     if (!lightboxOpen) return;
@@ -338,9 +357,9 @@ export default function EventDetail() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className={`grid grid-cols-1 ${isEventPast ? 'lg:grid-cols-1' : 'lg:grid-cols-3'} gap-8`}>
           {/* Left Column - Event Info */}
-          <div className="lg:col-span-2">
+          <div className={isEventPast ? '' : 'lg:col-span-2'}>
             {/* Cover Image with overlay */}
             <div className="h-[28rem] relative overflow-hidden rounded-2xl mb-8">
               {(event.image_url || event.cover_image) ? (
@@ -553,39 +572,41 @@ export default function EventDetail() {
             </div>
           </div>
 
-          {/* Right Column - Booking Card */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-8">
-              <div className="text-center mb-6">
-                <div className="text-3xl font-bold text-green-600 mb-2">
-                  {parseFloat(event.price).toLocaleString('vi-VN')} {event.currency || 'VND'}
-                </div>
-                {event.early_bird_price && parseFloat(event.early_bird_price) < parseFloat(event.price) && (
-                  <div className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full inline-block">
-                    Early bird: {parseFloat(event.early_bird_price).toLocaleString('vi-VN')} {event.currency || 'VND'}
+          {/* Right Column - Booking Card - Only show if event hasn't passed */}
+          {!isEventPast && (
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-8">
+                <div className="text-center mb-6">
+                  <div className="text-3xl font-bold text-green-600 mb-2">
+                    {parseFloat(event.price).toLocaleString('vi-VN')} {event.currency || 'VND'}
                   </div>
-                )}
-              </div>
+                  {event.early_bird_price && parseFloat(event.early_bird_price) < parseFloat(event.price) && (
+                    <div className="text-sm text-green-600 bg-green-100 px-3 py-1 rounded-full inline-block">
+                      Early bird: {parseFloat(event.early_bird_price).toLocaleString('vi-VN')} {event.currency || 'VND'}
+                    </div>
+                  )}
+                </div>
 
-              <button
-                onClick={() => setShowBookingModal(true)}
-                className="w-full bg-blue-500 text-white py-4 rounded-lg font-semibold text-lg hover:bg-blue-600 transition-colors mb-4"
-              >
-                Đặt vé ngay
-              </button>
+                <button
+                  onClick={() => setShowBookingModal(true)}
+                  className="w-full bg-blue-500 text-white py-4 rounded-lg font-semibold text-lg hover:bg-blue-600 transition-colors mb-4"
+                >
+                  Đặt vé ngay
+                </button>
 
-              <div className="text-sm text-gray-500 text-center">
-                <p>• Vé không hoàn lại</p>
-                <p>• Có thể đổi tên người tham gia</p>
-                <p>• Hỗ trợ 24/7</p>
+                <div className="text-sm text-gray-500 text-center">
+                  <p>• Vé không hoàn lại</p>
+                  <p>• Có thể đổi tên người tham gia</p>
+                  <p>• Hỗ trợ 24/7</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Booking Modal */}
-      {showBookingModal && (
+      {/* Booking Modal - Only show if event hasn't passed */}
+      {showBookingModal && !isEventPast && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-8">

@@ -1191,79 +1191,83 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {Array.isArray(eventsData) ? eventsData.map((event) => (
-                        <tr key={event.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{event.title}</div>
-                              <div className="text-sm text-gray-500">{event.description?.substring(0, 50)}...</div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {new Date(event.event_date).toLocaleDateString('vi-VN')}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {event.duration_hours}h
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {event.space_name || 'N/A'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {event.organizer_name || 'N/A'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              event.status === 'approved' ? 'bg-green-100 text-green-800' :
-                              event.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {event.status === 'approved' ? 'Đã duyệt' :
-                               event.status === 'pending' ? 'Chờ duyệt' : 'Từ chối'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center gap-2">
-                              {/* Approval buttons - only show for pending events */}
-                              {event.status === 'pending' && (
-                                <>
-                                  <button
-                                    onClick={() => handleApproveEvent(event.id)}
-                                    className="text-green-600 hover:text-green-900 bg-green-50 px-2 py-1 rounded"
-                                    title="Duyệt sự kiện"
-                                  >
-                                    <CheckCircle className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRejectEvent(event.id)}
-                                    className="text-red-600 hover:text-red-900 bg-red-50 px-2 py-1 rounded"
-                                    title="Từ chối sự kiện"
-                                  >
-                                    <XCircle className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-                              
-                              {/* Edit and Delete buttons */}
-                              <button
-                                onClick={() => handleEditEvent(event)}
-                                className="text-blue-600 hover:text-blue-900"
-                                title="Chỉnh sửa"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteEvent(event.id)}
-                                className="text-red-600 hover:text-red-900"
-                                title="Xóa"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )) : (
+                      {Array.isArray(eventsData) && eventsData.length > 0 ? (
+                        eventsData.map((event) => (
+                          <tr key={event.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">{event.title}</div>
+                                <div className="text-sm text-gray-500">{event.description?.substring(0, 50)}...</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {new Date(event.event_date).toLocaleDateString('vi-VN')}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {event.duration_hours}h
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {event.space_name || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {event.organizer_name || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                event.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                event.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {event.status === 'approved' ? 'Đã duyệt' :
+                                 event.status === 'pending' ? 'Chờ duyệt' : 'Từ chối'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center gap-2">
+                                {/* Approval buttons - only show for pending events */}
+                                {event.status === 'pending' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleApproveEvent(event.id)}
+                                      className="text-green-600 hover:text-green-900 bg-green-50 px-2 py-1 rounded"
+                                      title="Duyệt sự kiện"
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectEvent(event.id)}
+                                      className="text-red-600 hover:text-red-900 bg-red-50 px-2 py-1 rounded"
+                                      title="Từ chối sự kiện"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                                
+                                {/* Edit and Delete buttons */}
+                                <button
+                                  onClick={() => handleEditEvent(event)}
+                                  className="text-blue-600 hover:text-blue-900"
+                                  title="Chỉnh sửa"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteEvent(event.id)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Xóa"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
                         <tr>
-                          <td colSpan="7" className="px-6 py-4 text-center text-gray-500">Không có events nào</td>
+                          <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                            {eventsLoading ? 'Đang tải...' : 'Không có events nào'}
+                          </td>
                         </tr>
                       )}
                     </tbody>
