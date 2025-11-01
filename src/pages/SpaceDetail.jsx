@@ -156,21 +156,93 @@ export default function SpaceDetail() {
               <div className="mb-8">
                 <h3 className="text-2xl font-semibold text-gray-800 mb-4">Vị trí</h3>
                 <div className="bg-white rounded-lg shadow-lg p-6">
-                  <iframe
-                    src={space.google_maps_url.replace('/place/', '/embed/')}
-                    width="100%"
-                    height="450"
-                    style={{ border: 0 }}
-                    allowFullScreen=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    className="rounded-lg"
-                  />
+                  {/* Extract location name from URL or use address */}
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <p className="text-lg font-semibold text-gray-800">
+                        {(() => {
+                          // Extract location from Google Maps URL
+                          if (space.address) {
+                            return space.address;
+                          }
+                          // Try to extract from URL
+                          try {
+                            const url = new URL(space.google_maps_url);
+                            // For /place/ URLs
+                            if (url.pathname.includes('/place/')) {
+                              const placePart = url.pathname.split('/place/')[1];
+                              if (placePart) {
+                                const locationName = decodeURIComponent(placePart.split('/')[0].replace(/\+/g, ' '));
+                                return locationName || 'Vị trí trên bản đồ';
+                              }
+                            }
+                          } catch (e) {
+                            // If URL parsing fails, try simple string extraction
+                            const placeMatch = space.google_maps_url.match(/\/place\/([^/?]+)/);
+                            if (placeMatch) {
+                              return decodeURIComponent(placeMatch[1].replace(/\+/g, ' '));
+                            }
+                          }
+                          return 'Vị trí trên bản đồ';
+                        })()}
+                      </p>
+                    </div>
+                    {(space.address || space.city) && (
+                      <p className="text-gray-600 ml-7">
+                        {space.address && `${space.address}`}
+                        {space.address && space.city && ', '}
+                        {space.city}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Google Maps Embed */}
+                  {(() => {
+                    // Convert Google Maps URL to embed format
+                    let embedUrl = space.google_maps_url;
+                    const isShortUrl = embedUrl.includes('goo.gl') || embedUrl.includes('maps.app.goo.gl');
+                    
+                    if (isShortUrl) {
+                      // Short URLs cannot be embedded, show link only
+                      return null;
+                    }
+                    
+                    if (embedUrl.includes('/place/')) {
+                      // Convert to embed format
+                      embedUrl = embedUrl.replace(/\/maps\/place\//, '/maps/embed/place/');
+                    } else if (embedUrl.includes('/@')) {
+                      // For coordinates format: /@lat,lng,zoom
+                      embedUrl = embedUrl.replace(/\/maps\//, '/maps/embed/');
+                    } else if (!embedUrl.includes('/embed/')) {
+                      // Try to convert general maps URLs
+                      embedUrl = embedUrl.replace(/\/maps\//, '/maps/embed/');
+                    }
+                    
+                    return (
+                      <div className="mb-4 rounded-lg overflow-hidden">
+                        <iframe
+                          src={embedUrl}
+                          width="100%"
+                          height="450"
+                          style={{ border: 0 }}
+                          allowFullScreen=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                          className="rounded-lg"
+                        />
+                      </div>
+                    );
+                  })()}
+                  
                   <a 
                     href={space.google_maps_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors mt-4"
+                    className="inline-flex items-center px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
