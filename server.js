@@ -1517,22 +1517,48 @@ app.post('/api/spaces', authenticateToken, requirePartnerOrAdmin, optionalUpload
       }
     }
 
-    // Xử lý amenities và equipment
+    // Xử lý amenities
     const amenitiesArray = amenities ? (Array.isArray(amenities) ? amenities : amenities.split(',').map(a => a.trim()).filter(a => a)) : [];
-    const equipmentArray = equipment ? (Array.isArray(equipment) ? equipment : equipment.split(',').map(e => e.trim()).filter(e => e)) : [];
 
     // Check which columns exist and build query dynamically
     // Basic columns that should exist: name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status
+    console.log('🔍 Creating space with data:', {
+      name,
+      description,
+      address,
+      city,
+      capacity,
+      price_per_hour,
+      amenities: amenitiesArray,
+      images,
+      owner_id: req.user.id,
+      status: 'pending'
+    });
+
+    // Note: images should be TEXT[] array in Postgres, not JSON string
+    const imagesArray = Array.isArray(images) ? images : (images ? [images] : []);
+    
     const result = await pool.query(
       `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenitiesArray, JSON.stringify(images), req.user.id, 'pending']
+      [name, description, address, city, capacity, price_per_hour, amenitiesArray, imagesArray, req.user.id, 'pending']
     );
 
+    console.log('✅ Space created successfully:', result.rows[0]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error('Error creating space:', error);
-    res.status(500).json({ error: 'Failed to create space' });
+    console.error('❌ Error creating space:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      detail: error.detail
+    });
+    res.status(500).json({ 
+      error: 'Failed to create space',
+      message: error.message,
+      detail: error.detail
+    });
   }
 });
 
