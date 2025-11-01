@@ -1477,7 +1477,7 @@ app.get('/api/spaces/:id', async (req, res) => {
 // Create new space
 app.post('/api/spaces', authenticateToken, requirePartnerOrAdmin, uploadMultipleImages, handleUploadError, async (req, res) => {
   try {
-    const { name, description, address, city, capacity, price_per_hour, amenities } = req.body;
+    const { name, description, address, city, capacity, price_per_hour, amenities, equipment, rules, contact_name, contact_email, contact_phone, google_maps_url } = req.body;
     
     // Lấy thông tin user từ token
     const userResult = await pool.query('SELECT id FROM users WHERE id = $1', [req.user.id]);
@@ -1488,16 +1488,29 @@ app.post('/api/spaces', authenticateToken, requirePartnerOrAdmin, uploadMultiple
     // Xử lý ảnh nếu có
     let images = [];
     if (req.files && req.files.length > 0) {
+      // Images from file uploads
       images = req.files.map(file => getFileUrl(req, file.filename));
+    } else if (req.body.images) {
+      // Images from JSON body (already uploaded URLs)
+      if (Array.isArray(req.body.images)) {
+        images = req.body.images;
+      } else if (typeof req.body.images === 'string') {
+        try {
+          images = JSON.parse(req.body.images);
+        } catch {
+          images = [req.body.images];
+        }
+      }
     }
 
-    // Xử lý amenities
-    const amenitiesArray = amenities ? (Array.isArray(amenities) ? amenities : amenities.split(',').map(a => a.trim())) : [];
+    // Xử lý amenities và equipment
+    const amenitiesArray = amenities ? (Array.isArray(amenities) ? amenities : amenities.split(',').map(a => a.trim()).filter(a => a)) : [];
+    const equipmentArray = equipment ? (Array.isArray(equipment) ? equipment : equipment.split(',').map(e => e.trim()).filter(e => e)) : [];
 
     const result = await pool.query(
-      `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenitiesArray, JSON.stringify(images), req.user.id, 'pending']
+      `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, equipment, rules, images, contact_name, contact_email, contact_phone, google_maps_url, owner_id, status) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
+      [name, description, address, city, capacity, price_per_hour, amenitiesArray, equipmentArray, rules || null, JSON.stringify(images), contact_name || null, contact_email || null, contact_phone || null, google_maps_url || null, req.user.id, 'pending']
     );
 
     res.status(201).json(result.rows[0]);
