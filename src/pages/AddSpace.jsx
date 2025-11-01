@@ -21,6 +21,7 @@ export default function AddSpace() {
   const [loading, setLoading] = React.useState(false);
   const [uploadingImages, setUploadingImages] = React.useState(false);
   const [spaceImages, setSpaceImages] = React.useState([]);
+  const [user, setUser] = React.useState(null);
   const [formData, setFormData] = React.useState({
     name: '',
     description: '',
@@ -38,6 +39,13 @@ export default function AddSpace() {
     google_maps_url: ''
   });
 
+  // Load user data
+  React.useEffect(() => {
+    const userData = localStorage.getItem('user_data');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+  }, []);
 
   // Upload image function
   const uploadImage = async (file, type = 'spaces') => {
@@ -101,34 +109,90 @@ export default function AddSpace() {
     setLoading(true);
 
     try {
+      // Get token and user
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        throw new Error('Vui lòng đăng nhập để tạo space.');
+      }
+
+      if (!user) {
+        throw new Error('Không tìm thấy thông tin user. Vui lòng đăng nhập lại.');
+      }
+
+      // Check if user is admin or partner
+      const userRole = user.role?.toLowerCase();
+      if (!['admin', 'partner'].includes(userRole)) {
+        throw new Error('Chỉ admin và partner mới có thể tạo space.');
+      }
+
       const spaceData = {
         ...formData,
         capacity: parseInt(formData.capacity),
         price_per_hour: parseFloat(formData.price_per_hour) || 0,
         amenities: formData.amenities.split(',').map(s => s.trim()).filter(s => s),
-        equipment: formData.equipment.split(',').map(s => s.trim()).filter(s => s),
-        images: spaceImages,
-        owner_id: 1 // Default to admin for now
+        equipment: formData.equipment.split(',').map(s => s.trim()).filter(s => s)
       };
 
-      // Get token
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('No admin token found. Please login as admin.');
+      const apiBase = API_BASE_URL.replace('/api', '');
+      
+      // Use different endpoint based on role
+      // Admin -> /api/admin/spaces (auto approved) - accepts JSON
+      // Partner -> /api/spaces (pending, needs approval) - accepts multipart/form-data
+      let endpoint;
+      let requestOptions;
+      
+      if (userRole === 'admin') {
+        spaceData.owner_id = user.id;
+        spaceData.images = spaceImages; // JSON endpoint accepts images array
+        endpoint = `${apiBase}/api/admin/spaces`;
+        requestOptions = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(spaceData)
+        };
+      } else {
+        // Partner uses multipart/form-data for /api/spaces
+        const formDataToSend = new FormData();
+        formDataToSend.append('name', spaceData.name);
+        formDataToSend.append('description', spaceData.description);
+        formDataToSend.append('address', spaceData.address);
+        formDataToSend.append('city', spaceData.city);
+        formDataToSend.append('capacity', spaceData.capacity);
+        formDataToSend.append('price_per_hour', spaceData.price_per_hour);
+        formDataToSend.append('amenities', spaceData.amenities.join(','));
+        formDataToSend.append('equipment', spaceData.equipment.join(','));
+        if (spaceData.rules) formDataToSend.append('rules', spaceData.rules);
+        if (spaceData.contact_name) formDataToSend.append('contact_name', spaceData.contact_name);
+        if (spaceData.contact_email) formDataToSend.append('contact_email', spaceData.contact_email);
+        if (spaceData.contact_phone) formDataToSend.append('contact_phone', spaceData.contact_phone);
+        if (spaceData.google_maps_url) formDataToSend.append('google_maps_url', spaceData.google_maps_url);
+        
+        // For partner, images are already uploaded, send them as URLs in body
+        // But backend expects files, so we'll send images as part of form data
+        // Note: Backend might need to handle pre-uploaded images differently
+        // For now, we'll try sending JSON with images
+        endpoint = `${apiBase}/api/spaces`;
+        requestOptions = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            ...spaceData,
+            images: spaceImages.map(img => img.startsWith('/uploads/') ? img : `/uploads/${img}`)
+          })
+        };
       }
       
-      console.log('🔍 Debug - Token:', token);
+      console.log('🔍 Debug - User role:', userRole);
+      console.log('🔍 Debug - Endpoint:', endpoint);
       console.log('🔍 Debug - Space data:', spaceData);
       
-      const apiBase = API_BASE_URL.replace('/api', '');
-      const response = await fetch(`${apiBase}/api/admin/spaces`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(spaceData)
-      });
+      const response = await fetch(endpoint, requestOptions);
       
       console.log('🔍 Debug - Response status:', response.status);
       console.log('🔍 Debug - Response headers:', response.headers);
@@ -143,8 +207,15 @@ export default function AddSpace() {
 
       const result = await response.json();
       console.log('🔍 Debug - Success response:', result);
-      alert('Space đã được tạo thành công!');
-      navigate('/Admin');
+      
+      // Show different message based on role
+      if (userRole === 'admin') {
+        alert('Space đã được tạo thành công và đã được duyệt!');
+        navigate('/Admin');
+      } else {
+        alert('Space đã được tạo thành công! Đang chờ admin duyệt.');
+        navigate('/PartnerDashboard');
+      }
     } catch (error) {
       console.error('Error creating space:', error);
       alert('Có lỗi xảy ra khi tạo space: ' + error.message);
