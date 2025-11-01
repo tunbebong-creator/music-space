@@ -11,6 +11,45 @@ import Pagination from "../components/Pagination";
 import ModernAuthModal from "../components/ModernAuthModal";
 import { getUploadUrl } from "@/config/api.js";
 
+// Component để hiển thị ảnh với placeholder khi lỗi
+function PostMediaImage({ src, alt, isVideo, className }) {
+  const [imageError, setImageError] = React.useState(false);
+  
+  if (imageError) {
+    return (
+      <div className={`w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-sky-100 to-blue-100 ${className}`}>
+        <BookOpen className="w-16 h-16 text-sky-300 mb-3" />
+        <p className="text-sky-500 text-sm font-medium text-center">Không thể tải hình ảnh</p>
+      </div>
+    );
+  }
+  
+  if (isVideo) {
+    return (
+      <video
+        src={src}
+        className={className}
+        muted
+        playsInline
+        onError={() => setImageError(true)}
+      />
+    );
+  }
+  
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => {
+        setImageError(true);
+      }}
+      onLoad={() => setImageError(false)}
+    />
+  );
+}
+
 export default function We() {
   const [user, setUser] = React.useState(null);
   const [showWriteModal, setShowWriteModal] = React.useState(false);
@@ -401,35 +440,13 @@ export default function We() {
                     const isVideo = firstMedia?.includes('/videos/') || firstMedia?.match(/\.(mp4|webm|ogg)$/i);
                     
                     return (
-                      <div className="w-full overflow-hidden relative bg-gray-100 min-h-[200px] sm:min-h-[250px] md:min-h-[300px]">
-                        {isVideo ? (
-                          <video
-                            src={firstMedia}
-                            className="w-full h-auto max-h-[200px] sm:max-h-[250px] md:max-h-96 object-cover group-hover:scale-105 transition-transform duration-700"
-                            muted
-                            playsInline
-                            onError={(e) => {
-                              console.error('Video load error:', firstMedia);
-                              e.target.style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <img
-                            src={firstMedia}
-                            alt={post.title}
-                            className="w-full h-auto max-h-[200px] sm:max-h-[250px] md:max-h-96 object-cover group-hover:scale-105 transition-transform duration-700"
-                            loading="lazy"
-                            onError={(e) => {
-                              console.error('Image load error:', firstMedia);
-                              // Don't hide on error, show placeholder instead
-                              e.target.style.opacity = '0.5';
-                              e.target.onerror = null; // Prevent infinite loop
-                            }}
-                            onLoad={() => {
-                              console.log(`✅ Image loaded successfully: ${firstMedia}`);
-                            }}
-                          />
-                        )}
+                      <div className="w-full overflow-hidden relative bg-gradient-to-br from-sky-100 to-blue-100 min-h-[200px] sm:min-h-[250px] md:min-h-[300px]">
+                        <PostMediaImage
+                          src={firstMedia}
+                          alt={post.title}
+                          isVideo={isVideo}
+                          className="w-full h-full min-h-[200px] sm:min-h-[250px] md:min-h-[300px] object-cover group-hover:scale-105 transition-transform duration-700"
+                        />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
                         <div className="absolute top-2 left-2 sm:top-4 sm:left-4 pointer-events-auto">
                           <span className="px-2 py-1 sm:px-3 sm:py-1 bg-white/90 backdrop-blur-sm text-sky-600 text-xs sm:text-sm font-semibold rounded-full">
