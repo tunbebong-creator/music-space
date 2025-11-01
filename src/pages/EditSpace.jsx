@@ -23,6 +23,7 @@ export default function EditSpace() {
   const [uploadingImages, setUploadingImages] = React.useState(false);
   const [spaceImages, setSpaceImages] = React.useState([]);
   const [currentStatus, setCurrentStatus] = React.useState(null);
+  const [user, setUser] = React.useState(null);
   const [formData, setFormData] = React.useState({
     name: '',
     description: '',
@@ -40,6 +41,22 @@ export default function EditSpace() {
     google_maps_url: ''
   });
 
+  // Check user role on mount
+  React.useEffect(() => {
+    const userData = localStorage.getItem('user_data');
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      setUser(parsedUser);
+      // Only admin can edit spaces from admin panel
+      if (parsedUser.role !== 'admin') {
+        console.warn('⚠️ Non-admin user trying to access EditSpace from admin panel');
+        navigate('/Admin', { replace: true });
+      }
+    } else {
+      // No user data, redirect to Admin
+      navigate('/Admin', { replace: true });
+    }
+  }, [navigate]);
 
   // Load space data
   React.useEffect(() => {
