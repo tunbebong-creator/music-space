@@ -483,6 +483,44 @@ export default function Admin() {
     }
   };
 
+  const handleApproveSpace = async (spaceId) => {
+    if (window.confirm('Bạn có chắc chắn muốn duyệt space này?')) {
+      try {
+        await fetchWithAuth(`/api/spaces/${spaceId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'approved' })
+        });
+        refetchSpaces();
+        alert('Space đã được duyệt thành công!');
+      } catch (error) {
+        console.error('Error approving space:', error);
+        alert('Có lỗi xảy ra khi duyệt space');
+      }
+    }
+  };
+
+  const handleRejectSpace = async (spaceId) => {
+    if (window.confirm('Bạn có chắc chắn muốn từ chối space này?')) {
+      try {
+        await fetchWithAuth(`/api/spaces/${spaceId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'rejected' })
+        });
+        refetchSpaces();
+        alert('Space đã bị từ chối!');
+      } catch (error) {
+        console.error('Error rejecting space:', error);
+        alert('Có lỗi xảy ra khi từ chối space');
+      }
+    }
+  };
+
   // Event handlers
   const handleEditEvent = (event) => {
     navigate(`/EditEvent/${event.id}`);
@@ -1079,15 +1117,38 @@ export default function Admin() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center gap-2">
+                              {/* Approval buttons - only show for pending spaces */}
+                              {space.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveSpace(space.id)}
+                                    className="text-green-600 hover:text-green-900 bg-green-50 px-2 py-1 rounded"
+                                    title="Duyệt space"
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectSpace(space.id)}
+                                    className="text-red-600 hover:text-red-900 bg-red-50 px-2 py-1 rounded"
+                                    title="Từ chối space"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                              
+                              {/* Edit and Delete buttons */}
                               <button
                                 onClick={() => handleEditSpace(space)}
                                 className="text-blue-600 hover:text-blue-900"
+                                title="Chỉnh sửa"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDeleteSpace(space.id)}
                                 className="text-red-600 hover:text-red-900"
+                                title="Xóa"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
