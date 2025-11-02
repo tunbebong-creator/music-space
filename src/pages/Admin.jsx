@@ -31,6 +31,7 @@ import {
   MessageSquare
 } from "lucide-react";
 import ChatPanel from "@/components/ChatPanel";
+import Pagination from "@/components/Pagination";
 import { format } from "date-fns";
 import { API_BASE_URL, getUploadUrl } from '@/config/api.js';
 
@@ -44,6 +45,8 @@ export default function Admin() {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [filterRole, setFilterRole] = React.useState("");
   const [filterStatus, setFilterStatus] = React.useState("");
+  const [usersPage, setUsersPage] = React.useState(1);
+  const [usersPerPage, setUsersPerPage] = React.useState(10);
   const [showAddSpaceModal, setShowAddSpaceModal] = React.useState(false);
   const [showAddEventModal, setShowAddEventModal] = React.useState(false);
   const [editingSpace, setEditingSpace] = React.useState(null);
@@ -257,10 +260,15 @@ export default function Admin() {
   });
 
   const { data: usersData, isLoading: usersLoading, refetch: refetchUsers } = useQuery({
-    queryKey: ['admin-users', searchTerm, filterRole],
-    queryFn: () => fetchWithAuth(`/api/admin/users?search=${searchTerm}&role=${filterRole}`),
+    queryKey: ['admin-users', searchTerm, filterRole, usersPage, usersPerPage],
+    queryFn: () => fetchWithAuth(`/api/admin/users?search=${searchTerm}&role=${filterRole}&page=${usersPage}&limit=${usersPerPage}`),
     enabled: !!user && user.role === 'admin' && activeTab === 'users',
   });
+
+  // Reset page to 1 when search or filter changes
+  React.useEffect(() => {
+    setUsersPage(1);
+  }, [searchTerm, filterRole]);
 
   const { data: spacesData, isLoading: spacesLoading, refetch: refetchSpaces, error: spacesError } = useQuery({
     queryKey: ['admin-spaces', searchTerm, filterStatus],
@@ -904,6 +912,19 @@ export default function Admin() {
                   <option value="artist">Artist</option>
                   <option value="admin">Admin</option>
                 </select>
+                <select
+                  value={usersPerPage}
+                  onChange={(e) => {
+                    setUsersPerPage(Number(e.target.value));
+                    setUsersPage(1);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="10">10/trang</option>
+                  <option value="20">20/trang</option>
+                  <option value="50">50/trang</option>
+                  <option value="100">100/trang</option>
+                </select>
                 <button
                   onClick={() => refetchUsers()}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -986,6 +1007,22 @@ export default function Admin() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              )}
+              
+              {/* Pagination */}
+              {usersData?.pagination && usersData.pagination.pages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="text-sm text-gray-600">
+                      Hiển thị {((usersPage - 1) * usersPerPage) + 1} - {Math.min(usersPage * usersPerPage, usersData.pagination.total)} trong tổng số {usersData.pagination.total} users
+                    </div>
+                    <Pagination
+                      currentPage={usersPage}
+                      totalPages={usersData.pagination.pages}
+                      onPageChange={setUsersPage}
+                    />
+                  </div>
                 </div>
               )}
             </div>

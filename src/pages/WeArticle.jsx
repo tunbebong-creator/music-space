@@ -13,9 +13,67 @@ import { vi } from "date-fns/locale";
 import { createPageUrl } from "@/utils";
 import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
-// Component để hiển thị ảnh với placeholder khi lỗi
+// Component để hiển thị ảnh với placeholder khi lỗi và retry logic
 function PostMediaImage({ src, alt, isVideo, className, onImageClick }) {
-  const [imageError, setImageError] = React.useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [retryCount, setRetryCount] = useState(0);
+  
+  // Generate alternative URLs to try if the main one fails
+  const getAlternativeUrls = (originalUrl) => {
+    if (!originalUrl) return [];
+    
+    const alternatives = [];
+    
+    // If URL contains /general/, try other subdirectories
+    if (originalUrl.includes('/general/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/general/'));
+      alternatives.push(`${baseUrl}/events/${filename}`);
+      alternatives.push(`${baseUrl}/spaces/${filename}`);
+    }
+    
+    // If URL contains /events/, try general
+    if (originalUrl.includes('/events/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/events/'));
+      alternatives.push(`${baseUrl}/general/${filename}`);
+      alternatives.push(`${baseUrl}/spaces/${filename}`);
+    }
+    
+    // If URL contains /spaces/, try general
+    if (originalUrl.includes('/spaces/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/spaces/'));
+      alternatives.push(`${baseUrl}/general/${filename}`);
+      alternatives.push(`${baseUrl}/events/${filename}`);
+    }
+    
+    return alternatives;
+  };
+  
+  const handleImageError = () => {
+    const alternatives = getAlternativeUrls(currentSrc);
+    
+    if (retryCount < alternatives.length) {
+      // Try next alternative URL
+      const nextUrl = alternatives[retryCount];
+      console.log(`🔄 Retrying image load with alternative URL ${retryCount + 1}/${alternatives.length}:`, nextUrl);
+      setCurrentSrc(nextUrl);
+      setRetryCount(prev => prev + 1);
+    } else {
+      // All alternatives exhausted, show error placeholder
+      console.log('❌ All image load attempts failed for:', src);
+      setImageError(true);
+    }
+  };
+  
+  // Reset when src prop changes
+  useEffect(() => {
+    setCurrentSrc(src);
+    setImageError(false);
+    setRetryCount(0);
+  }, [src]);
   
   if (imageError) {
     return (
@@ -29,10 +87,10 @@ function PostMediaImage({ src, alt, isVideo, className, onImageClick }) {
   if (isVideo) {
     return (
       <video
-        src={src}
+        src={currentSrc}
         controls
         className={className}
-        onError={() => setImageError(true)}
+        onError={handleImageError}
       />
     );
   }
@@ -40,14 +98,17 @@ function PostMediaImage({ src, alt, isVideo, className, onImageClick }) {
   return (
     <div className="relative group cursor-pointer" onClick={onImageClick}>
       <img
-        src={src}
+        src={currentSrc}
         alt={alt}
         className={className}
         loading="lazy"
-        onError={() => {
-          setImageError(true);
+        onError={handleImageError}
+        onLoad={() => {
+          if (retryCount > 0) {
+            console.log('✅ Image loaded successfully with alternative URL');
+          }
+          setImageError(false);
         }}
-        onLoad={() => setImageError(false)}
       />
       {onImageClick && (
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">

@@ -25,12 +25,11 @@ if (calculatedApiUrl.includes('music-space-server')) {
 export const API_BASE_URL = calculatedApiUrl;
 export const API_UPLOAD_BASE = calculatedUploadBase;
 
-// Final validation warning
-if (API_BASE_URL.includes('usic-space-server') || API_UPLOAD_BASE.includes('usic-space-server')) {
-  console.error('❌ CRITICAL: API URLs still contain typo after fix. This should not happen!');
-  console.error('Current API_BASE_URL:', API_BASE_URL);
-  console.error('Current API_UPLOAD_BASE:', API_UPLOAD_BASE);
-}
+// Log final URLs for debugging
+console.log('🔗 API Configuration:', {
+  API_BASE_URL,
+  API_UPLOAD_BASE
+});
 
 // Helper function to get full URL
 export const getApiUrl = (endpoint) => {

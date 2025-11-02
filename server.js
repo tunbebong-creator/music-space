@@ -69,35 +69,134 @@ if (!fs.existsSync(uploadsAbsolutePath)) {
   console.log('📁 Created uploads directory:', uploadsAbsolutePath);
 }
 
+// CRITICAL: Route-specific handler for /uploads/:type/:filename BEFORE static middleware
+// This ensures we can handle files in subdirectories properly
+// Handle /uploads/:type/:filename pattern using middleware
+app.use('/uploads', (req, res, next) => {
+  // Only handle GET requests for file serving
+  if (req.method !== 'GET') {
+    return next();
+  }
+
+  // Parse path: /uploads/:type/:filename
+  const pathMatch = req.path.match(/^\/([^\/]+)\/(.+)$/);
+  if (!pathMatch) {
+    return next(); // Let static middleware handle it
+  }
+
+  const type = pathMatch[1];
+  const filename = pathMatch[2];
+  
+  if (!type || !filename) {
+    return next();
+  }
+  
+  // Comprehensive candidate paths
+  const candidates = [
+    path.join(uploadsAbsolutePath, type, filename),
+    path.join(process.cwd(), 'uploads', type, filename),
+    path.join(uploadsAbsolutePath, filename),
+    path.join(process.cwd(), 'uploads', filename),
+    // Try all common subdirectories with the filename
+    path.join(uploadsAbsolutePath, 'general', filename),
+    path.join(uploadsAbsolutePath, 'events', filename),
+    path.join(uploadsAbsolutePath, 'spaces', filename),
+    path.join(uploadsAbsolutePath, 'videos', filename),
+  ];
+  
+  console.log('🔍 GET /uploads/:type/:filename - Looking for:', { type, filename, requestPath: req.path });
+  
+  // Try to find and serve the file
+  for (const fullPath of candidates) {
+    try {
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        console.log('✅ Found file at:', fullPath);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        // Detect content type
+        const ext = path.extname(fullPath).toLowerCase();
+        const contentType = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp',
+          '.mp4': 'video/mp4',
+          '.webm': 'video/webm',
+        }[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        return res.sendFile(fullPath);
+      }
+    } catch (err) {
+      console.error('Error checking path:', fullPath, err.message);
+      continue;
+    }
+  }
+  
+  // Log all candidates for debugging
+  console.log('❌ File not found. Tried paths:', candidates.map(c => ({ path: c, exists: fs.existsSync(c) })));
+  res.status(404).json({ 
+    error: 'File not found', 
+    type, 
+    filename,
+    requestPath: req.path,
+    candidates: candidates.map(c => ({ path: c, exists: fs.existsSync(c) }))
+  });
+});
+
+// Also handle /uploads/:filename pattern (without type)
+app.get('/uploads/:filename', (req, res) => {
+  const { filename } = req.params;
+  
+  const candidates = [
+    path.join(uploadsAbsolutePath, filename),
+    path.join(process.cwd(), 'uploads', filename),
+    path.join(uploadsAbsolutePath, 'general', filename),
+    path.join(uploadsAbsolutePath, 'events', filename),
+    path.join(uploadsAbsolutePath, 'spaces', filename),
+    path.join(uploadsAbsolutePath, 'videos', filename),
+  ];
+  
+  console.log('🔍 GET /uploads/:filename - Looking for:', filename);
+  
+  for (const fullPath of candidates) {
+    try {
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        console.log('✅ Found file at:', fullPath);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        const ext = path.extname(fullPath).toLowerCase();
+        const contentType = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp',
+          '.mp4': 'video/mp4',
+          '.webm': 'video/webm',
+        }[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        return res.sendFile(fullPath);
+      }
+    } catch (err) {
+      continue;
+    }
+  }
+  
+  console.log('❌ File not found:', filename);
+  res.status(404).json({ error: 'File not found', filename });
+});
+
+// Serve static files from uploads directory (fallback for direct file access)
 app.use('/uploads', express.static(uploadsAbsolutePath, {
-  setHeaders: (res, path) => {
+  setHeaders: (res, filePath) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Cache-Control', 'public, max-age=3600');
-  }
+  },
+  fallthrough: false // Don't fallthrough, return 404 if not found
 }));
-
-// Fallback resolver for uploads in case of path discrepancies
-app.get('/uploads/:type/:filename', (req, res, next) => {
-  const { type, filename } = req.params;
-  const candidates = [
-    path.join(uploadsAbsolutePath, type, filename),
-    path.join(process.cwd(), 'uploads', type, filename),
-  ];
-  
-  console.log('🔍 Looking for file:', { type, filename, candidates });
-  
-  for (const full of candidates) {
-    if (fs.existsSync(full)) {
-      console.log('✅ Found file at:', full);
-      return res.sendFile(full);
-    }
-  }
-  
-  console.log('❌ File not found in any candidate path');
-  return res.status(404).json({ error: 'File not found', type, filename, candidates });
-});
 
 // Root route
 app.get('/', (req, res) => {
@@ -115,7 +214,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// Debug endpoint to test image URLs
+// Debug endpoint to test image URLs and list files
 app.get('/api/debug/image-url', (req, res) => {
   const { url } = req.query;
   if (!url) {
@@ -124,23 +223,91 @@ app.get('/api/debug/image-url', (req, res) => {
   
   const SERVER_BASE = process.env.SERVER_BASE_URL || 'https://usic-space-server.onrender.com';
   
-  // Check if URL is accessible
-  const fullPath = url.startsWith('/uploads/') 
-    ? path.join(uploadsAbsolutePath, url.replace('/uploads/', ''))
-    : path.join(uploadsAbsolutePath, url);
+  // Extract path from URL
+  let relativePath = url;
+  if (url.startsWith('http')) {
+    try {
+      const urlObj = new URL(url);
+      relativePath = urlObj.pathname;
+    } catch {
+      relativePath = url;
+    }
+  }
   
-  const exists = fs.existsSync(fullPath);
-  const stats = exists ? fs.statSync(fullPath) : null;
+  // Remove /uploads/ prefix if present
+  if (relativePath.startsWith('/uploads/')) {
+    relativePath = relativePath.replace('/uploads/', '');
+  }
+  
+  // Try multiple paths
+  const candidates = [
+    path.join(uploadsAbsolutePath, relativePath),
+    path.join(uploadsAbsolutePath, 'general', path.basename(relativePath)),
+    path.join(uploadsAbsolutePath, 'events', path.basename(relativePath)),
+    path.join(uploadsAbsolutePath, 'spaces', path.basename(relativePath)),
+  ];
+  
+  const results = candidates.map(candidate => ({
+    path: candidate,
+    exists: fs.existsSync(candidate),
+    isFile: fs.existsSync(candidate) ? fs.statSync(candidate).isFile() : false,
+    size: fs.existsSync(candidate) ? fs.statSync(candidate).size : null
+  }));
+  
+  const found = results.find(r => r.exists && r.isFile);
   
   res.json({
     original_url: url,
-    full_path: fullPath,
-    exists,
-    is_file: stats?.isFile(),
-    size: stats?.size,
+    relative_path: relativePath,
+    candidates: results,
+    found: found ? found.path : null,
     server_base: SERVER_BASE,
     resolved_url: url.startsWith('http') ? url : `${SERVER_BASE}${url.startsWith('/') ? url : '/' + url}`
   });
+});
+
+// Debug endpoint to list all files in uploads
+app.get('/api/debug/uploads-list', (req, res) => {
+  try {
+    const listFiles = (dir, baseDir = '') => {
+      const files = [];
+      if (!fs.existsSync(dir)) return files;
+      
+      const items = fs.readdirSync(dir);
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const relativePath = path.join(baseDir, item);
+        const stat = fs.statSync(fullPath);
+        
+        if (stat.isFile()) {
+          files.push({
+            path: relativePath,
+            fullPath: fullPath,
+            size: stat.size,
+            url: `/uploads/${relativePath.replace(/\\/g, '/')}`
+          });
+        } else if (stat.isDirectory()) {
+          files.push(...listFiles(fullPath, relativePath));
+        }
+      }
+      return files;
+    };
+    
+    const allFiles = listFiles(uploadsAbsolutePath);
+    
+    res.json({
+      uploadsPath: uploadsAbsolutePath,
+      totalFiles: allFiles.length,
+      files: allFiles.slice(0, 100), // Limit to first 100
+      directories: {
+        general: fs.existsSync(path.join(uploadsAbsolutePath, 'general')) ? fs.readdirSync(path.join(uploadsAbsolutePath, 'general')).length : 0,
+        events: fs.existsSync(path.join(uploadsAbsolutePath, 'events')) ? fs.readdirSync(path.join(uploadsAbsolutePath, 'events')).length : 0,
+        spaces: fs.existsSync(path.join(uploadsAbsolutePath, 'spaces')) ? fs.readdirSync(path.join(uploadsAbsolutePath, 'spaces')).length : 0,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Debug: check uploads existence
