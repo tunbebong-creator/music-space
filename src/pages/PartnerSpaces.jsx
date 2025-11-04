@@ -72,7 +72,7 @@ export default function PartnerSpaces() {
       console.log('🔍 Fetching spaces with token:', token.substring(0, 20) + '...');
       console.log('🔍 User:', user);
       
-      const response = await fetch(`${API_BASE_URL}/admin/spaces`, {
+      const response = await fetch(`${API_BASE_URL}/admin/spaces?format=array`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -86,7 +86,8 @@ export default function PartnerSpaces() {
       
       const data = await response.json();
       console.log('✅ Spaces fetched:', data);
-      return Array.isArray(data) ? data : [];
+      // Handle both formats: array or { spaces: [...] }
+      return Array.isArray(data) ? data : (data?.spaces || []);
     },
     enabled: !!user && !!localStorage.getItem('auth_token'),
     retry: false,

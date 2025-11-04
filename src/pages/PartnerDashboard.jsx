@@ -75,14 +75,15 @@ export default function PartnerDashboard() {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
       if (!token) throw new Error('No authentication token');
       
-      const response = await fetch(`${API_BASE_URL}/admin/spaces`, {
+      const response = await fetch(`${API_BASE_URL}/admin/spaces?format=array`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       if (!response.ok) throw new Error('Failed to fetch spaces');
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      // Handle both formats: array or { spaces: [...] }
+      return Array.isArray(data) ? data : (data?.spaces || []);
     },
     enabled: !!user && !!localStorage.getItem('auth_token'),
   });

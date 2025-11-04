@@ -465,7 +465,14 @@ router.get('/spaces', authenticateToken, requireAdminOrPartner, async (req, res)
     query += ` ORDER BY s.created_at DESC`;
 
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    
+    // Return format compatible with Admin page (expects { spaces: [...] })
+    // But also support direct array for partner pages
+    const responseFormat = req.query.format === 'array' 
+      ? result.rows 
+      : { spaces: result.rows };
+    
+    res.json(responseFormat);
   } catch (error) {
     console.error('Error fetching spaces:', error);
     res.status(500).json({ error: 'Failed to fetch spaces' });
