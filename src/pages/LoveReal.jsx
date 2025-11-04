@@ -5,6 +5,90 @@ import { RefreshCw, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import { getUploadUrl, API_BASE_URL } from "@/config/api.js";
 
+// Component để hiển thị ảnh với retry logic khi lỗi
+function SpaceImageWithRetry({ src, alt, className, onLoad, onError }) {
+  const [imageError, setImageError] = React.useState(false);
+  const [currentSrc, setCurrentSrc] = React.useState(src);
+  const [retryCount, setRetryCount] = React.useState(0);
+  
+  // Generate alternative URLs to try if the main one fails
+  const getAlternativeUrls = (originalUrl) => {
+    if (!originalUrl) return [];
+    
+    const alternatives = [];
+    
+    // If URL contains /general/, try other subdirectories
+    if (originalUrl.includes('/general/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/general/'));
+      alternatives.push(`${baseUrl}/events/${filename}`);
+      alternatives.push(`${baseUrl}/spaces/${filename}`);
+    }
+    
+    // If URL contains /events/, try general
+    if (originalUrl.includes('/events/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/events/'));
+      alternatives.push(`${baseUrl}/general/${filename}`);
+      alternatives.push(`${baseUrl}/spaces/${filename}`);
+    }
+    
+    // If URL contains /spaces/, try general
+    if (originalUrl.includes('/spaces/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/spaces/'));
+      alternatives.push(`${baseUrl}/general/${filename}`);
+      alternatives.push(`${baseUrl}/events/${filename}`);
+    }
+    
+    return alternatives;
+  };
+  
+  const handleImageError = (e) => {
+    const alternatives = getAlternativeUrls(currentSrc);
+    
+    if (retryCount < alternatives.length) {
+      // Try next alternative URL
+      const nextUrl = alternatives[retryCount];
+      console.log(`🔄 Retrying LoveReal image load with alternative URL ${retryCount + 1}/${alternatives.length}:`, nextUrl);
+      setCurrentSrc(nextUrl);
+      setRetryCount(prev => prev + 1);
+    } else {
+      // All alternatives exhausted - hide the broken image so placeholder shows
+      console.log('❌ LoveReal: All image load attempts failed for:', src);
+      setImageError(true);
+      if (onError) onError(e);
+      // Prevent infinite loop and hide broken image
+      e.target.onerror = null;
+      e.target.style.display = 'none';
+    }
+  };
+  
+  const handleImageLoad = (e) => {
+    setImageError(false);
+    e.target.style.display = '';
+    if (onLoad) onLoad(e);
+  };
+  
+  // Reset when src prop changes
+  React.useEffect(() => {
+    setCurrentSrc(src);
+    setImageError(false);
+    setRetryCount(0);
+  }, [src]);
+  
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={handleImageError}
+      onLoad={handleImageLoad}
+    />
+  );
+}
+
 export default function LoveReal() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = React.useState("events");
@@ -907,24 +991,25 @@ export default function LoveReal() {
                     transition={{ duration: 0.6, delay: 1.6 + index * 0.1 }}
                     whileHover={{ y: -8, scale: 1.02 }}
                     className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 border border-sky-200/50">
-                    <div className="h-48 bg-gradient-to-br from-blue-400 to-purple-500 relative">
+                    <div className="h-48 bg-gradient-to-br from-blue-400 to-purple-500 relative overflow-hidden">
                       {space.images && space.images.length > 0 ? (
-                        <img 
-                          src={getUploadUrl(space.images[0])} 
-                          alt={space.name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          onLoad={() => console.log('✅ Space image loaded:', space.images[0])}
-                          onError={(e) => {
-                            console.log('❌ Space image load error:', space.images[0]);
-                            e.target.style.opacity = '0.5';
-                            e.target.onerror = null;
-                          }}
-                        />
-                      ) : null}
-                      <div className={`w-full h-full flex items-center justify-center ${space.images && space.images.length > 0 ? 'hidden' : 'flex'}`}>
-                        <div className="text-6xl text-white opacity-80">🏢</div>
-                      </div>
+                        <>
+                          <SpaceImageWithRetry
+                            src={getUploadUrl(space.images[0])} 
+                            alt={space.name}
+                            className="w-full h-full object-cover"
+                            onLoad={() => console.log('✅ Space image loaded:', space.images[0])}
+                            onError={() => console.log('❌ Space image load error:', space.images[0])}
+                          />
+                          <div className="w-full h-full flex items-center justify-center absolute inset-0 pointer-events-none" style={{ zIndex: -1 }}>
+                            <div className="text-6xl text-white opacity-80">🏢</div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="text-6xl text-white opacity-80">🏢</div>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="p-6">

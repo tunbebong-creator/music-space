@@ -37,32 +37,73 @@ export default function PartnerDashboard() {
 
   // Load user data
   useEffect(() => {
-    const userData = localStorage.getItem('user_data');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
+    const loadUser = async () => {
+      const userData = localStorage.getItem('user_data');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+        
+        // Refresh user data from server to ensure role is up-to-date
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+        if (token) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/auth/me`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            if (response.ok) {
+              const serverUser = await response.json();
+              console.log('✅ User data refreshed from server:', serverUser);
+              setUser(serverUser);
+              localStorage.setItem('user_data', JSON.stringify(serverUser));
+            }
+          } catch (error) {
+            console.error('❌ Failed to refresh user data:', error);
+          }
+        }
+      }
+    };
+    
+    loadUser();
   }, []);
 
   // Fetch spaces
   const { data: spaces = [], isLoading: spacesLoading } = useQuery({
-    queryKey: ['partner-spaces'],
+    queryKey: ['partner-spaces', user?.id],
     queryFn: async () => {
-      const response = await fetch(`${API_BASE_URL}/spaces`);
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+      if (!token) throw new Error('No authentication token');
+      
+      const response = await fetch(`${API_BASE_URL}/admin/spaces`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch spaces');
       const data = await response.json();
-      return data.spaces || [];
-    }
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!user && !!localStorage.getItem('auth_token'),
   });
 
   // Fetch events
   const { data: events = [], isLoading: eventsLoading } = useQuery({
-    queryKey: ['partner-events'],
+    queryKey: ['partner-events', user?.id],
     queryFn: async () => {
-      const response = await fetch(`${API_BASE_URL}/events`);
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+      if (!token) throw new Error('No authentication token');
+      
+      const response = await fetch(`${API_BASE_URL}/admin/events`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch events');
       const data = await response.json();
-      return data.events || [];
-    }
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!user && !!localStorage.getItem('auth_token'),
   });
 
   // Fetch notifications
@@ -97,9 +138,9 @@ export default function PartnerDashboard() {
     refetchInterval: 5000,
   });
 
-  // Filter user's own spaces and events
-  const mySpaces = spaces.filter(space => space.owner_id === user?.id);
-  const myEvents = events.filter(event => event.organizer_id === user?.id);
+  // Filter user's own spaces and events (already filtered by backend, but keep for safety)
+  const mySpaces = spaces.filter(space => !user || space.owner_id === user.id || space.owner_id === String(user.id));
+  const myEvents = events.filter(event => !user || event.organizer_id === user.id || event.organizer_id === String(user.id));
 
   // Stats
   const stats = {

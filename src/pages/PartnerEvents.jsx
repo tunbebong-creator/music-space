@@ -18,6 +18,7 @@ import {
   Filter
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { API_BASE_URL } from '@/config/api.js';
 
 export default function PartnerEvents() {
   const navigate = useNavigate();
@@ -35,17 +36,25 @@ export default function PartnerEvents() {
 
   // Fetch events
   const { data: events = [], isLoading } = useQuery({
-    queryKey: ['partner-events'],
+    queryKey: ['partner-events', user?.id],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3001/api/events');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+      if (!token) throw new Error('No authentication token');
+      
+      const response = await fetch(`${API_BASE_URL}/admin/events`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch events');
       const data = await response.json();
-      return data.events || [];
-    }
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!user && !!localStorage.getItem('auth_token'),
   });
 
-  // Filter user's own events
-  const myEvents = events.filter(event => event.organizer_id === user?.id);
+  // Filter user's own events (already filtered by backend, but keep for safety)
+  const myEvents = events.filter(event => !user || event.organizer_id === user.id || event.organizer_id === String(user.id));
 
   // Apply filters
   const filteredEvents = myEvents.filter(event => {

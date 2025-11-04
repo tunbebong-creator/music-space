@@ -28,25 +28,82 @@ export default function PartnerSpaces() {
 
   // Load user data
   useEffect(() => {
-    const userData = localStorage.getItem('user_data');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
+    const loadUser = async () => {
+      const userData = localStorage.getItem('user_data');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+        
+        // Refresh user data from server to ensure role is up-to-date
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+        if (token) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/auth/me`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            if (response.ok) {
+              const serverUser = await response.json();
+              console.log('✅ User data refreshed from server:', serverUser);
+              setUser(serverUser);
+              localStorage.setItem('user_data', JSON.stringify(serverUser));
+            }
+          } catch (error) {
+            console.error('❌ Failed to refresh user data:', error);
+          }
+        }
+      }
+    };
+    
+    loadUser();
   }, []);
 
   // Fetch spaces
-  const { data: spaces = [], isLoading } = useQuery({
-    queryKey: ['partner-spaces'],
+  const { data: spaces = [], isLoading, error: spacesError } = useQuery({
+    queryKey: ['partner-spaces', user?.id],
     queryFn: async () => {
-      const response = await fetch(`${API_BASE_URL}/spaces`);
-      if (!response.ok) throw new Error('Failed to fetch spaces');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+      if (!token) {
+        console.error('❌ No authentication token found');
+        throw new Error('No authentication token');
+      }
+      
+      console.log('🔍 Fetching spaces with token:', token.substring(0, 20) + '...');
+      console.log('🔍 User:', user);
+      
+      const response = await fetch(`${API_BASE_URL}/admin/spaces`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Failed to fetch spaces:', response.status, errorText);
+        throw new Error(`Failed to fetch spaces: ${response.status} - ${errorText}`);
+      }
+      
       const data = await response.json();
-      return data.spaces || [];
-    }
+      console.log('✅ Spaces fetched:', data);
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!user && !!localStorage.getItem('auth_token'),
+    retry: false,
   });
 
-  // Filter user's own spaces
-  const mySpaces = spaces.filter(space => space.owner_id === user?.id);
+  // Filter user's own spaces (already filtered by backend, but keep for safety)
+  const mySpaces = spaces.filter(space => !user || space.owner_id === user.id || space.owner_id === String(user.id));
+  
+  // Debug logging
+  React.useEffect(() => {
+    if (spacesError) {
+      console.error('❌ Spaces query error:', spacesError);
+    }
+    if (spaces.length > 0) {
+      console.log('✅ Spaces loaded:', spaces.length);
+    }
+  }, [spaces, spacesError]);
 
   // Apply filters
   const filteredSpaces = mySpaces.filter(space => {
@@ -69,13 +126,37 @@ export default function PartnerSpaces() {
     }
   };
 
-  if (!user || user.role !== 'partner') {
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⏳</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Đang tải...</h2>
+        </div>
+      </div>
+    );
+  }
+  
+  if (user.role !== 'partner') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">🔒</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Không có quyền truy cập</h2>
-          <p className="text-gray-600 mb-6">Chỉ có đối tác mới có thể truy cập trang này.</p>
+          <p className="text-gray-600 mb-6">
+            Bạn cần có quyền "partner" để truy cập trang này.
+            <br />
+            Role hiện tại của bạn: <strong>{user.role || 'chưa xác định'}</strong>
+            <br />
+            Vui lòng liên hệ admin để được cấp quyền partner.
+          </p>
+          {spacesError && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800 text-sm">
+                <strong>Lỗi API:</strong> {spacesError.message}
+              </p>
+            </div>
+          )}
           <button
             onClick={() => navigate('/You')}
             className="bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors"

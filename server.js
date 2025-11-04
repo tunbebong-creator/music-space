@@ -455,6 +455,10 @@ async function requirePartnerOrAdmin(req, res, next) {
 
 // Routes
 
+// Mount admin routes FIRST to avoid conflicts with other /api/admin/* routes
+// Admin routes must be mounted before individual admin routes in server.js
+app.use('/api/admin', adminRoutes);
+
 // Health check with database test
 app.get('/api/health', async (req, res) => {
   try {
@@ -3099,65 +3103,9 @@ app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Admin Spaces Management
-app.get('/api/admin/spaces', authenticateToken, async (req, res) => {
-  try {
-    // Check if user is admin
-    const userResult = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id]);
-    if (userResult.rows.length === 0 || userResult.rows[0].role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const { page = 1, limit = 10, search = '', status = '' } = req.query;
-    const offset = (page - 1) * limit;
-
-    let query = `
-      SELECT s.*, u.full_name as owner_name, u.email as owner_email
-      FROM spaces s
-      LEFT JOIN users u ON s.owner_id = u.id
-    `;
-    let countQuery = 'SELECT COUNT(*) as count FROM spaces s';
-    const params = [];
-    const conditions = [];
-
-    if (search) {
-      conditions.push(`(s.name ILIKE $${params.length + 1} OR s.address ILIKE $${params.length + 1})`);
-      params.push(`%${search}%`);
-    }
-
-    if (status) {
-      conditions.push(`s.status = $${params.length + 1}`);
-      params.push(status);
-    }
-
-    if (conditions.length > 0) {
-      const whereClause = ' WHERE ' + conditions.join(' AND ');
-      query += whereClause;
-      countQuery += whereClause;
-    }
-
-    query += ` ORDER BY s.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(parseInt(limit), offset);
-
-    const [spacesResult, countResult] = await Promise.all([
-      pool.query(query, params),
-      pool.query(countQuery, params.slice(0, -2))
-    ]);
-
-    res.json({
-      spaces: spacesResult.rows,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: parseInt(countResult.rows[0].count),
-        pages: Math.ceil(parseInt(countResult.rows[0].count) / limit)
-      }
-    });
-  } catch (error) {
-    console.error('Admin spaces error:', error);
-    res.status(500).json({ error: 'Failed to fetch spaces' });
-  }
-});
+// Admin Spaces Management - REMOVED: Now handled by adminRoutes
+// This route is now in server/routes/admin.js with requireAdminOrPartner support
+// Route removed to avoid conflict with adminRoutes
 
 // Admin Bookings Management
 app.get('/api/admin/bookings', authenticateToken, async (req, res) => {
@@ -4420,8 +4368,8 @@ app.put('/api/admin/event-registrations/:id/reject', authenticateToken, async (r
 });
 
 
-// Admin routes
-app.use('/api/admin', adminRoutes);
+// Admin routes - Already mounted above, removing duplicate
+// app.use('/api/admin', adminRoutes); // MOVED TO TOP OF ROUTES SECTION
 app.use('/api/upload', uploadRoutes);
 
 // Notifications API

@@ -3,6 +3,90 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
+// Component để hiển thị ảnh với retry logic khi lỗi
+function SpaceImage({ src, alt, className, onLoad, onError }) {
+  const [imageError, setImageError] = React.useState(false);
+  const [currentSrc, setCurrentSrc] = React.useState(src);
+  const [retryCount, setRetryCount] = React.useState(0);
+  
+  // Generate alternative URLs to try if the main one fails
+  const getAlternativeUrls = (originalUrl) => {
+    if (!originalUrl) return [];
+    
+    const alternatives = [];
+    
+    // If URL contains /general/, try other subdirectories
+    if (originalUrl.includes('/general/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/general/'));
+      alternatives.push(`${baseUrl}/events/${filename}`);
+      alternatives.push(`${baseUrl}/spaces/${filename}`);
+    }
+    
+    // If URL contains /events/, try general
+    if (originalUrl.includes('/events/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/events/'));
+      alternatives.push(`${baseUrl}/general/${filename}`);
+      alternatives.push(`${baseUrl}/spaces/${filename}`);
+    }
+    
+    // If URL contains /spaces/, try general
+    if (originalUrl.includes('/spaces/')) {
+      const filename = originalUrl.split('/').pop();
+      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/spaces/'));
+      alternatives.push(`${baseUrl}/general/${filename}`);
+      alternatives.push(`${baseUrl}/events/${filename}`);
+    }
+    
+    return alternatives;
+  };
+  
+  const handleImageError = (e) => {
+    const alternatives = getAlternativeUrls(currentSrc);
+    
+    if (retryCount < alternatives.length) {
+      // Try next alternative URL
+      const nextUrl = alternatives[retryCount];
+      console.log(`🔄 Retrying SpaceDetail image load with alternative URL ${retryCount + 1}/${alternatives.length}:`, nextUrl);
+      setCurrentSrc(nextUrl);
+      setRetryCount(prev => prev + 1);
+    } else {
+      // All alternatives exhausted - hide the broken image so placeholder shows
+      console.log('❌ SpaceDetail: All image load attempts failed for:', src);
+      setImageError(true);
+      if (onError) onError(e);
+      // Prevent infinite loop and hide broken image
+      e.target.onerror = null;
+      e.target.style.display = 'none';
+    }
+  };
+  
+  const handleImageLoad = (e) => {
+    setImageError(false);
+    e.target.style.display = '';
+    if (onLoad) onLoad(e);
+  };
+  
+  // Reset when src prop changes
+  React.useEffect(() => {
+    setCurrentSrc(src);
+    setImageError(false);
+    setRetryCount(0);
+  }, [src]);
+  
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={handleImageError}
+      onLoad={handleImageLoad}
+    />
+  );
+}
+
 export default function SpaceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -66,22 +150,23 @@ export default function SpaceDetail() {
             {/* Cover Image */}
             <div className="h-96 relative overflow-hidden rounded-2xl shadow-lg mb-8">
               {space.images && space.images.length > 0 ? (
-                <img 
-                  src={getUploadUrl(space.images[0])} 
-                  alt={space.name}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    console.log('❌ SpaceDetail cover image load error:', space.images[0]);
-                    e.target.style.opacity = '0.5';
-                    e.target.onerror = null;
-                  }}
-                  onLoad={() => {
-                    console.log('✅ SpaceDetail cover image loaded:', space.images[0]);
-                  }}
-                />
-              ) : null}
-              {(!space.images || space.images.length === 0) && (
+                <>
+                  <SpaceImage 
+                    src={getUploadUrl(space.images[0])} 
+                    alt={space.name}
+                    className="w-full h-full object-cover"
+                    onLoad={() => {
+                      console.log('✅ SpaceDetail cover image loaded:', space.images[0]);
+                    }}
+                    onError={(e) => {
+                      console.log('❌ SpaceDetail cover image load error:', space.images[0]);
+                    }}
+                  />
+                  <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center absolute inset-0 pointer-events-none" style={{ zIndex: -1 }}>
+                    <div className="text-8xl text-white opacity-80">🏢</div>
+                  </div>
+                </>
+              ) : (
                 <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
                   <div className="text-8xl text-white opacity-80">🏢</div>
                 </div>
@@ -101,19 +186,16 @@ export default function SpaceDetail() {
                 <h3 className="text-2xl font-semibold text-gray-800 mb-4">Hình ảnh</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {space.images.slice(1).map((image, index) => (
-                    <img 
+                    <SpaceImage 
                       key={index}
                       src={getUploadUrl(image)} 
                       alt={`Gallery ${index + 1}`}
                       className="w-full h-48 object-cover rounded-lg shadow-sm"
-                      loading="lazy"
-                      onError={(e) => {
-                        console.log('❌ SpaceDetail gallery image load error:', image);
-                        e.target.style.opacity = '0.5';
-                        e.target.onerror = null;
-                      }}
                       onLoad={() => {
                         console.log('✅ SpaceDetail gallery image loaded:', image);
+                      }}
+                      onError={(e) => {
+                        console.log('❌ SpaceDetail gallery image load error:', image);
                       }}
                     />
                   ))}

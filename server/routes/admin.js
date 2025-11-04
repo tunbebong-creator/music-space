@@ -24,31 +24,37 @@ const requireAdmin = (req, res, next) => {
 
 // Middleware cho phép cả admin và partner
 const requireAdminOrPartner = async (req, res, next) => {
-  // Kiểm tra role từ token trước
-  if (req.user && req.user.role) {
-    const role = String(req.user.role).toLowerCase();
-    if (['admin', 'partner'].includes(role)) {
-      return next();
-    }
+  console.log('🔍 requireAdminOrPartner - req.user:', req.user);
+  
+  if (!req.user || !req.user.id) {
+    console.warn('⚠️ No req.user or req.user.id');
+    return res.status(403).json({ error: 'Authentication required' });
   }
   
-  // Nếu token không có role, load từ database
-  if (req.user && req.user.id) {
-    try {
-      const result = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id]);
-      if (result.rows.length > 0) {
-        const role = String(result.rows[0].role).toLowerCase();
-        if (['admin', 'partner'].includes(role)) {
-          // Cập nhật req.user.role để dùng cho các middleware sau
-          req.user.role = result.rows[0].role;
-          return next();
-        }
+  // Luôn kiểm tra role từ database để đảm bảo chính xác (role có thể thay đổi)
+  try {
+    console.log('🔍 Loading role from database for user ID:', req.user.id);
+    const result = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id]);
+    if (result.rows.length > 0) {
+      const role = String(result.rows[0].role).toLowerCase();
+      console.log('🔍 Role from database:', role);
+      if (['admin', 'partner'].includes(role)) {
+        // Cập nhật req.user.role để dùng cho các middleware sau
+        req.user.role = result.rows[0].role;
+        console.log('✅ Access granted - role:', role);
+        return next();
+      } else {
+        console.warn('⚠️ User role is not admin or partner:', role);
       }
-    } catch (error) {
-      console.error('Error loading user role:', error);
+    } else {
+      console.warn('⚠️ User not found in database:', req.user.id);
     }
+  } catch (error) {
+    console.error('❌ Error loading user role:', error);
+    return res.status(500).json({ error: 'Failed to verify user role' });
   }
   
+  console.error('❌ Access denied - Admin or partner access required');
   return res.status(403).json({ error: 'Admin or partner access required' });
 };
 
@@ -415,8 +421,12 @@ router.put('/events/:id/reject', authenticateToken, requireAdmin, async (req, re
   }
 });
 
-// Get all spaces (admin)
-router.get('/spaces', authenticateToken, requireAdmin, async (req, res) => {
+// Get all spaces (admin & partner)
+router.get('/spaces', authenticateToken, requireAdminOrPartner, async (req, res) => {
+  console.log('🔍 GET /api/admin/spaces - Route handler called');
+  console.log('🔍 req.user:', req.user);
+  console.log('🔍 req.user.id:', req.user?.id);
+  console.log('🔍 req.user.role:', req.user?.role);
   try {
     const { search, status } = req.query;
     let query = `
@@ -438,6 +448,13 @@ router.get('/spaces', authenticateToken, requireAdmin, async (req, res) => {
     if (status) {
       conditions.push(`s.status = $${paramCount}`);
       params.push(status);
+      paramCount++;
+    }
+
+    // Nếu là partner thì chỉ xem space mình tạo
+    if (req.user && String(req.user.role).toLowerCase() === 'partner') {
+      conditions.push(`s.owner_id = $${paramCount}`);
+      params.push(req.user.id);
       paramCount++;
     }
 
