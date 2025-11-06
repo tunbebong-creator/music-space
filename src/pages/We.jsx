@@ -11,73 +11,54 @@ import Pagination from "../components/Pagination";
 import ModernAuthModal from "../components/ModernAuthModal";
 import { getUploadUrl } from "@/config/api.js";
 
-// Component để hiển thị ảnh với placeholder khi lỗi và retry logic
+// Component để hiển thị ảnh với placeholder khi lỗi
 function PostMediaImage({ src, alt, isVideo, className }) {
   const [imageError, setImageError] = React.useState(false);
-  const [currentSrc, setCurrentSrc] = React.useState(src);
   const [retryCount, setRetryCount] = React.useState(0);
+  const [imgSrc, setImgSrc] = React.useState(src);
+  const MAX_RETRIES = 1; // Chỉ retry 1 lần với cùng URL (để xử lý lỗi tạm thời)
   
-  // Generate alternative URLs to try if the main one fails
-  const getAlternativeUrls = (originalUrl) => {
-    if (!originalUrl) return [];
-    
-    const alternatives = [];
-    
-    // If URL contains /general/, try other subdirectories
-    if (originalUrl.includes('/general/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/general/'));
-      alternatives.push(`${baseUrl}/events/${filename}`);
-      alternatives.push(`${baseUrl}/spaces/${filename}`);
-    }
-    
-    // If URL contains /events/, try general
-    if (originalUrl.includes('/events/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/events/'));
-      alternatives.push(`${baseUrl}/general/${filename}`);
-      alternatives.push(`${baseUrl}/spaces/${filename}`);
-    }
-    
-    // If URL contains /spaces/, try general
-    if (originalUrl.includes('/spaces/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/spaces/'));
-      alternatives.push(`${baseUrl}/general/${filename}`);
-      alternatives.push(`${baseUrl}/events/${filename}`);
-    }
-    
-    return alternatives;
-  };
-  
-  const handleImageError = () => {
-    const alternatives = getAlternativeUrls(currentSrc);
-    
-    if (retryCount < alternatives.length) {
-      // Try next alternative URL
-      const nextUrl = alternatives[retryCount];
-      console.log(`🔄 Retrying image load with alternative URL ${retryCount + 1}/${alternatives.length}:`, nextUrl);
-      setCurrentSrc(nextUrl);
-      setRetryCount(prev => prev + 1);
-    } else {
-      // All alternatives exhausted, show error placeholder
-      console.log('❌ All image load attempts failed for:', src);
-      setImageError(true);
-    }
-  };
-  
-  // Reset when src prop changes
+  // Reset khi src thay đổi
   React.useEffect(() => {
-    setCurrentSrc(src);
+    setImgSrc(src);
     setImageError(false);
     setRetryCount(0);
   }, [src]);
   
+  const handleImageError = (e) => {
+    // Nếu chưa retry và có thể retry, thử lại với cùng URL (có thể là lỗi tạm thời)
+    if (retryCount < MAX_RETRIES) {
+      setRetryCount(prev => prev + 1);
+      // Force reload bằng cách thay đổi src tạm thời
+      setImgSrc('');
+      setTimeout(() => {
+        setImgSrc(src);
+      }, 500);
+    } else {
+      // Đã hết retry, hiển thị placeholder
+      console.error(`❌ We.jsx - Image load failed after ${MAX_RETRIES} retries:`, src);
+      setImageError(true);
+      // Ngăn infinite loop
+      if (e.target) {
+        e.target.onerror = null;
+        e.target.style.display = 'none';
+      }
+    }
+  };
+  
+  // Use eager loading for first few images, lazy for others
+  // MUST be called before any early returns (Rules of Hooks)
+  const loadingMode = React.useMemo(() => {
+    // For images in viewport or first image, use eager
+    return retryCount === 0 ? "eager" : "lazy";
+  }, [retryCount]);
+  
   if (imageError) {
     return (
-      <div className={`w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-sky-100 to-blue-100 ${className}`}>
+      <div className={`w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-sky-100 to-blue-100 ${className}`} style={{ minHeight: '200px' }}>
         <BookOpen className="w-16 h-16 text-sky-300 mb-3" />
         <p className="text-sky-500 text-sm font-medium text-center">Không thể tải hình ảnh</p>
+        <p className="text-sky-400 text-xs mt-2 text-center opacity-75">Ảnh có thể đã bị xóa hoặc không tồn tại</p>
       </div>
     );
   }
@@ -85,7 +66,7 @@ function PostMediaImage({ src, alt, isVideo, className }) {
   if (isVideo) {
     return (
       <video
-        src={currentSrc}
+        src={imgSrc}
         className={className}
         muted
         playsInline
@@ -93,20 +74,18 @@ function PostMediaImage({ src, alt, isVideo, className }) {
       />
     );
   }
-  
+
   return (
     <img
-      src={currentSrc}
+      src={imgSrc}
       alt={alt}
       className={className}
-      loading="lazy"
+      loading={loadingMode}
       onError={handleImageError}
       onLoad={() => {
-        if (retryCount > 0) {
-          console.log('✅ Image loaded successfully with alternative URL');
-        }
         setImageError(false);
       }}
+      decoding="async"
     />
   );
 }
@@ -481,22 +460,22 @@ export default function We() {
                     mediaUrls = mediaUrls.map(url => {
                       if (!url || !url.trim()) return null;
                       const fullUrl = getUploadUrl(url.trim());
-                      console.log(`🖼️ Processing image URL: ${url} -> ${fullUrl}`);
+                      console.log(`🖼️ We.jsx - Processing image URL for post "${post.title}":`, { original: url, full: fullUrl });
                       return fullUrl;
                     }).filter(Boolean);
                     
                     const firstMedia = mediaUrls[0];
                     
                     if (!firstMedia) {
-                      console.warn(`⚠️ No media found for post ${post.id}:`, {
+                      console.warn(`⚠️ We.jsx - No media found for post "${post.title}":`, {
                         image_url: post.image_url,
                         media_urls: post.media_urls,
-                        post_title: post.title
+                        parsed_mediaUrls: mediaUrls
                       });
                       return null;
                     }
                     
-                    console.log(`✅ Displaying image for post ${post.id}:`, firstMedia);
+                    console.log(`✅ We.jsx - Displaying image for post "${post.title}":`, firstMedia);
                     
                     const isVideo = firstMedia?.includes('/videos/') || firstMedia?.match(/\.(mp4|webm|ogg)$/i);
                     

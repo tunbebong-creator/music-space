@@ -124,6 +124,7 @@ function PagesContent() {
                 <Route path="/Events" element={<Events />} />
                 
                 <Route path="/We" element={<We />} />
+                <Route path="/we" element={<We />} />
                 
                 <Route path="/Love" element={<LoveReal />} />
                 <Route path="/event/:id" element={<EventDetail />} />

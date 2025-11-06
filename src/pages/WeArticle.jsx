@@ -13,67 +13,45 @@ import { vi } from "date-fns/locale";
 import { createPageUrl } from "@/utils";
 import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 
-// Component để hiển thị ảnh với placeholder khi lỗi và retry logic
+// Component để hiển thị ảnh với placeholder khi lỗi
 function PostMediaImage({ src, alt, isVideo, className, onImageClick }) {
   const [imageError, setImageError] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState(src);
   const [retryCount, setRetryCount] = useState(0);
+  const [imgSrc, setImgSrc] = useState(src);
+  const MAX_RETRIES = 1; // Chỉ retry 1 lần với cùng URL (để xử lý lỗi tạm thời)
   
-  // Generate alternative URLs to try if the main one fails
-  const getAlternativeUrls = (originalUrl) => {
-    if (!originalUrl) return [];
-    
-    const alternatives = [];
-    
-    // If URL contains /general/, try other subdirectories
-    if (originalUrl.includes('/general/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/general/'));
-      alternatives.push(`${baseUrl}/events/${filename}`);
-      alternatives.push(`${baseUrl}/spaces/${filename}`);
-    }
-    
-    // If URL contains /events/, try general
-    if (originalUrl.includes('/events/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/events/'));
-      alternatives.push(`${baseUrl}/general/${filename}`);
-      alternatives.push(`${baseUrl}/spaces/${filename}`);
-    }
-    
-    // If URL contains /spaces/, try general
-    if (originalUrl.includes('/spaces/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/spaces/'));
-      alternatives.push(`${baseUrl}/general/${filename}`);
-      alternatives.push(`${baseUrl}/events/${filename}`);
-    }
-    
-    return alternatives;
-  };
-  
-  const handleImageError = () => {
-    const alternatives = getAlternativeUrls(currentSrc);
-    
-    if (retryCount < alternatives.length) {
-      // Try next alternative URL
-      const nextUrl = alternatives[retryCount];
-      console.log(`🔄 Retrying image load with alternative URL ${retryCount + 1}/${alternatives.length}:`, nextUrl);
-      setCurrentSrc(nextUrl);
-      setRetryCount(prev => prev + 1);
-    } else {
-      // All alternatives exhausted, show error placeholder
-      console.log('❌ All image load attempts failed for:', src);
-      setImageError(true);
-    }
-  };
-  
-  // Reset when src prop changes
+  // Reset khi src thay đổi
   useEffect(() => {
-    setCurrentSrc(src);
+    setImgSrc(src);
     setImageError(false);
     setRetryCount(0);
   }, [src]);
+  
+  const handleImageError = (e) => {
+    // Nếu chưa retry và có thể retry, thử lại với cùng URL (có thể là lỗi tạm thời)
+    if (retryCount < MAX_RETRIES) {
+      setRetryCount(prev => prev + 1);
+      // Force reload bằng cách thay đổi src tạm thời
+      setImgSrc('');
+      setTimeout(() => {
+        setImgSrc(src);
+      }, 500);
+    } else {
+      // Đã hết retry, hiển thị placeholder
+      setImageError(true);
+      // Ngăn infinite loop
+      if (e.target) {
+        e.target.onerror = null;
+        e.target.style.display = 'none';
+      }
+    }
+  };
+  
+  // Use eager loading to avoid lazy loading issues
+  // MUST be called before any early returns (Rules of Hooks)
+  const loadingMode = React.useMemo(() => {
+    return retryCount === 0 ? "eager" : "lazy";
+  }, [retryCount]);
   
   if (imageError) {
     return (
@@ -87,28 +65,26 @@ function PostMediaImage({ src, alt, isVideo, className, onImageClick }) {
   if (isVideo) {
     return (
       <video
-        src={currentSrc}
+        src={imgSrc}
         controls
         className={className}
         onError={handleImageError}
       />
     );
   }
-  
+
   return (
     <div className="relative group cursor-pointer" onClick={onImageClick}>
       <img
-        src={currentSrc}
+        src={imgSrc}
         alt={alt}
         className={className}
-        loading="lazy"
+        loading={loadingMode}
         onError={handleImageError}
         onLoad={() => {
-          if (retryCount > 0) {
-            console.log('✅ Image loaded successfully with alternative URL');
-          }
           setImageError(false);
         }}
+        decoding="async"
       />
       {onImageClick && (
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">

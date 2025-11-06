@@ -6,57 +6,23 @@ import { API_BASE_URL, getUploadUrl } from "@/config/api.js";
 // Component để hiển thị ảnh với retry logic khi lỗi
 function SpaceImage({ src, alt, className, onLoad, onError }) {
   const [imageError, setImageError] = React.useState(false);
-  const [currentSrc, setCurrentSrc] = React.useState(src);
   const [retryCount, setRetryCount] = React.useState(0);
-  
-  // Generate alternative URLs to try if the main one fails
-  const getAlternativeUrls = (originalUrl) => {
-    if (!originalUrl) return [];
-    
-    const alternatives = [];
-    
-    // If URL contains /general/, try other subdirectories
-    if (originalUrl.includes('/general/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/general/'));
-      alternatives.push(`${baseUrl}/events/${filename}`);
-      alternatives.push(`${baseUrl}/spaces/${filename}`);
-    }
-    
-    // If URL contains /events/, try general
-    if (originalUrl.includes('/events/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/events/'));
-      alternatives.push(`${baseUrl}/general/${filename}`);
-      alternatives.push(`${baseUrl}/spaces/${filename}`);
-    }
-    
-    // If URL contains /spaces/, try general
-    if (originalUrl.includes('/spaces/')) {
-      const filename = originalUrl.split('/').pop();
-      const baseUrl = originalUrl.substring(0, originalUrl.lastIndexOf('/spaces/'));
-      alternatives.push(`${baseUrl}/general/${filename}`);
-      alternatives.push(`${baseUrl}/events/${filename}`);
-    }
-    
-    return alternatives;
-  };
+  const MAX_RETRIES = 1; // Chỉ retry 1 lần với cùng URL (để xử lý lỗi tạm thời)
   
   const handleImageError = (e) => {
-    const alternatives = getAlternativeUrls(currentSrc);
-    
-    if (retryCount < alternatives.length) {
-      // Try next alternative URL
-      const nextUrl = alternatives[retryCount];
-      console.log(`🔄 Retrying SpaceDetail image load with alternative URL ${retryCount + 1}/${alternatives.length}:`, nextUrl);
-      setCurrentSrc(nextUrl);
+    // Nếu chưa retry và có thể retry, thử lại với cùng URL (có thể là lỗi tạm thời)
+    if (retryCount < MAX_RETRIES) {
       setRetryCount(prev => prev + 1);
+      // Force reload bằng cách thay đổi src tạm thời
+      e.target.src = '';
+      setTimeout(() => {
+        e.target.src = src;
+      }, 500);
     } else {
-      // All alternatives exhausted - hide the broken image so placeholder shows
-      console.log('❌ SpaceDetail: All image load attempts failed for:', src);
+      // Đã hết retry, hiển thị placeholder
       setImageError(true);
       if (onError) onError(e);
-      // Prevent infinite loop and hide broken image
+      // Ngăn infinite loop và ẩn ảnh lỗi
       e.target.onerror = null;
       e.target.style.display = 'none';
     }
@@ -70,14 +36,13 @@ function SpaceImage({ src, alt, className, onLoad, onError }) {
   
   // Reset when src prop changes
   React.useEffect(() => {
-    setCurrentSrc(src);
     setImageError(false);
     setRetryCount(0);
   }, [src]);
   
   return (
     <img
-      src={currentSrc}
+      src={src}
       alt={alt}
       className={className}
       loading="lazy"
@@ -156,10 +121,8 @@ export default function SpaceDetail() {
                     alt={space.name}
                     className="w-full h-full object-cover"
                     onLoad={() => {
-                      console.log('✅ SpaceDetail cover image loaded:', space.images[0]);
                     }}
                     onError={(e) => {
-                      console.log('❌ SpaceDetail cover image load error:', space.images[0]);
                     }}
                   />
                   <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center absolute inset-0 pointer-events-none" style={{ zIndex: -1 }}>
@@ -192,10 +155,8 @@ export default function SpaceDetail() {
                       alt={`Gallery ${index + 1}`}
                       className="w-full h-48 object-cover rounded-lg shadow-sm"
                       onLoad={() => {
-                        console.log('✅ SpaceDetail gallery image loaded:', image);
                       }}
                       onError={(e) => {
-                        console.log('❌ SpaceDetail gallery image load error:', image);
                       }}
                     />
                   ))}

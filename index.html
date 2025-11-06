@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MusicSpace</title>
+    <script>
+      // Catch errors from browser extensions early
+      window.addEventListener('error', function(e) {
+        if (e.filename && e.filename.includes('prompt.js')) {
+          console.warn('Browser extension conflict detected. This may cause issues.');
+          e.preventDefault();
+          return true;
+        }
+      }, true);
+    </script>
   </head>
   <body>
     <div id="root"></div>
