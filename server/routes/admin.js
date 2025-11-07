@@ -242,7 +242,10 @@ router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
 // Get all events (admin & partner)
 router.get('/events', authenticateToken, requireAdminOrPartner, async (req, res) => {
   try {
+    console.log('🔍 Debug - Fetching events, user:', req.user?.id, req.user?.role);
     const { search, status } = req.query;
+    console.log('🔍 Debug - Query params:', { search, status });
+    
     let query = `
       SELECT e.*, s.name as space_name, u.full_name as organizer_name
       FROM events e
@@ -274,7 +277,12 @@ router.get('/events', authenticateToken, requireAdminOrPartner, async (req, res)
       query += ` WHERE ${conditions.join(' AND ')}`;
     }
     query += ` ORDER BY e.created_at DESC`;
+    
+    console.log('🔍 Debug - Executing query:', query);
+    console.log('🔍 Debug - Query params:', params);
+    
     const result = await pool.query(query, params);
+    console.log('✅ Debug - Found events:', result.rows.length);
     
     // Parse images for each event
     const mapped = result.rows.map((e) => {
@@ -292,8 +300,9 @@ router.get('/events', authenticateToken, requireAdminOrPartner, async (req, res)
     
     res.json(mapped);
   } catch (error) {
-    console.error('Error fetching events:', error);
-    res.status(500).json({ error: 'Failed to fetch events' });
+    console.error('❌ Error fetching events:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to fetch events', details: error.message });
   }
 });
 
