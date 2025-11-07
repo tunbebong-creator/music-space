@@ -116,75 +116,68 @@ router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
       gallery_images, space_id, organizer_id, drink_option, drink_price
     } = req.body;
 
-    // Simple INSERT with only basic columns that exist in original schema
-    const query = `
-      INSERT INTO events (
-        title, description, event_date, duration_hours, max_participants, 
-        price, space_id, organizer_id, status, approved, images
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-      ) RETURNING *
-    `;
-
     // Ensure gallery_images is properly formatted
     let imagesValue = [];
     if (gallery_images) {
       imagesValue = Array.isArray(gallery_images) ? gallery_images : (typeof gallery_images === 'string' ? JSON.parse(gallery_images) : []);
     }
     
-    const values = [
-      title || 'Untitled Event',
-      description || '',
-      event_date || new Date().toISOString(),
-      duration_hours || 2,
-      max_participants || 50,
-      price || 0,
-      space_id || null,
-      organizer_id || 1,
-      'pending',
-      false,
-      JSON.stringify(imagesValue) // Store as JSON string
-    ];
+    // Build INSERT query with ARRAY constructor for images (TEXT[])
+    let query, values;
+    if (imagesValue && imagesValue.length > 0) {
+      const arrayPlaceholders = imagesValue.map((_, i) => `$${11 + i}`).join(', ');
+      query = `
+        INSERT INTO events (
+          title, description, event_date, duration_hours, max_participants, 
+          price, space_id, organizer_id, status, approved, images
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ARRAY[${arrayPlaceholders}]::TEXT[]
+        ) RETURNING *
+      `;
+      values = [
+        title || 'Untitled Event',
+        description || '',
+        event_date || new Date().toISOString(),
+        duration_hours || 2,
+        max_participants || 50,
+        price || 0,
+        space_id || null,
+        organizer_id || 1,
+        'pending',
+        false,
+        ...imagesValue
+      ];
+    } else {
+      query = `
+        INSERT INTO events (
+          title, description, event_date, duration_hours, max_participants, 
+          price, space_id, organizer_id, status, approved, images
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL
+        ) RETURNING *
+      `;
+      values = [
+        title || 'Untitled Event',
+        description || '',
+        event_date || new Date().toISOString(),
+        duration_hours || 2,
+        max_participants || 50,
+        price || 0,
+        space_id || null,
+        organizer_id || 1,
+        'pending',
+        false
+      ];
+    }
 
     console.log('🔍 Debug - Executing query with values:', values);
     const result = await pool.query(query, values);
     const eventId = result.rows[0].id;
     
     // Update with additional fields if they exist
-    const updateQuery = `
-      UPDATE events SET 
-        category = $1,
-        tags = $2,
-        start_time = $3,
-        end_time = $4,
-        min_participants = $5,
-        currency = $6,
-        early_bird_price = $7,
-        early_bird_until = $8,
-        venue_name = $9,
-        venue_address = $10,
-        venue_city = $11,
-        latitude = $12,
-        longitude = $13,
-        google_maps_url = $14,
-        event_type = $15,
-        age_restriction = $16,
-        language = $17,
-        difficulty_level = $18,
-        organizer_name = $19,
-        organizer_email = $20,
-        organizer_phone = $21,
-        organizer_bio = $22,
-        requirements = $23,
-        what_to_bring = $24,
-        video_url = $25,
-        audio_preview = $26,
-        cover_image = $27,
-        gallery_images = $28
-      WHERE id = $29
-    `;
-    
-    const updateValues = [
+    // Build UPDATE query with ARRAY constructor for gallery_images (TEXT[])
+    let updateQuery, updateValues;
+    const baseParams = [
       category || 'workshop',
       tags || [],
       start_time || null,
@@ -211,14 +204,96 @@ router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
       what_to_bring || null,
       video_url || null,
       audio_preview || null,
-      cover_image || null,
-      gallery_images || [],
-      eventId
+      cover_image || null
     ];
+    
+    if (imagesValue && imagesValue.length > 0) {
+      const arrayPlaceholders = imagesValue.map((_, i) => `$${28 + i}`).join(', ');
+      updateQuery = `
+        UPDATE events SET 
+          category = $1,
+          tags = $2,
+          start_time = $3,
+          end_time = $4,
+          min_participants = $5,
+          currency = $6,
+          early_bird_price = $7,
+          early_bird_until = $8,
+          venue_name = $9,
+          venue_address = $10,
+          venue_city = $11,
+          latitude = $12,
+          longitude = $13,
+          google_maps_url = $14,
+          event_type = $15,
+          age_restriction = $16,
+          language = $17,
+          difficulty_level = $18,
+          organizer_name = $19,
+          organizer_email = $20,
+          organizer_phone = $21,
+          organizer_bio = $22,
+          requirements = $23,
+          what_to_bring = $24,
+          video_url = $25,
+          audio_preview = $26,
+          cover_image = $27,
+          gallery_images = ARRAY[${arrayPlaceholders}]::TEXT[]
+        WHERE id = $${28 + imagesValue.length}
+      `;
+      updateValues = [...baseParams, ...imagesValue, eventId];
+    } else {
+      updateQuery = `
+        UPDATE events SET 
+          category = $1,
+          tags = $2,
+          start_time = $3,
+          end_time = $4,
+          min_participants = $5,
+          currency = $6,
+          early_bird_price = $7,
+          early_bird_until = $8,
+          venue_name = $9,
+          venue_address = $10,
+          venue_city = $11,
+          latitude = $12,
+          longitude = $13,
+          google_maps_url = $14,
+          event_type = $15,
+          age_restriction = $16,
+          language = $17,
+          difficulty_level = $18,
+          organizer_name = $19,
+          organizer_email = $20,
+          organizer_phone = $21,
+          organizer_bio = $22,
+          requirements = $23,
+          what_to_bring = $24,
+          video_url = $25,
+          audio_preview = $26,
+          cover_image = $27,
+          gallery_images = NULL
+        WHERE id = $28
+      `;
+      updateValues = [...baseParams, eventId];
+    }
     
     try {
       await pool.query(updateQuery, updateValues);
       console.log('✅ Debug - Event updated with additional fields');
+      
+      // Also update images field (TEXT) for backward compatibility if gallery_images exists
+      if (imagesValue && imagesValue.length > 0) {
+        try {
+          await pool.query(
+            'UPDATE events SET images = $1 WHERE id = $2',
+            [JSON.stringify(imagesValue), eventId]
+          );
+          console.log('✅ Debug - images field updated for backward compatibility');
+        } catch (err) {
+          console.log('⚠️ Could not update images field:', err.message);
+        }
+      }
     } catch (updateError) {
       console.log('⚠️ Debug - Some additional fields could not be updated:', updateError.message);
     }
@@ -406,20 +481,16 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     console.log('✅ Debug - parsedGalleryImages (final):', parsedGalleryImages);
     console.log('✅ Debug - parsedGalleryImages type:', typeof parsedGalleryImages, Array.isArray(parsedGalleryImages));
 
-    // Ensure gallery_images is properly formatted for images field
-    // images field is TEXT (stores JSON string), gallery_images is TEXT[] (stores array)
-    let imagesValue = parsedGalleryImages || [];
-    
-    // Update basic fields first, including images
-    // images field stores JSON string for backward compatibility
+    // Update basic fields first - SKIP images field (it's TEXT[] and causes errors)
+    // We'll update gallery_images separately with proper ARRAY format
     const basicResult = await pool.query(
       `UPDATE events 
        SET title = $1, description = $2, event_date = $3, duration_hours = $4, 
            max_participants = $5, price = $6, space_id = $7, organizer_id = $8,
-           images = $9, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $10
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $9
        RETURNING *`,
-      [title, description, event_date, duration_hours, max_participants, price, space_id, organizer_id, Array.isArray(imagesValue) ? JSON.stringify(imagesValue) : imagesValue, id]
+      [title, description, event_date, duration_hours, max_participants, price, space_id, organizer_id, id]
     );
 
     if (basicResult.rows.length === 0) {
@@ -529,6 +600,15 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
       
       await pool.query(finalQuery, finalValues);
       console.log('✅ Debug - Event updated with additional fields');
+      
+      // Also update images field for backward compatibility (as JSON string)
+      if (parsedGalleryImages && Array.isArray(parsedGalleryImages) && parsedGalleryImages.length > 0) {
+        await pool.query(
+          'UPDATE events SET images = $1 WHERE id = $2',
+          [JSON.stringify(parsedGalleryImages), id]
+        );
+        console.log('✅ Debug - images field updated for backward compatibility');
+      }
     } catch (updateError) {
       console.error('❌ Debug - Some additional fields could not be updated:', updateError.message);
       console.error('❌ Update error details:', updateError);
@@ -807,18 +887,62 @@ router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
     console.log('🔍 Debug - Processed data:', {
       amenitiesArray,
       imagesArray,
-      google_maps_url
+      google_maps_url,
+      amenitiesIsArray: Array.isArray(amenitiesArray),
+      imagesIsArray: Array.isArray(imagesArray)
     });
 
-    const result = await pool.query(
-      `UPDATE spaces 
+    // Build query with ARRAY constructor for TEXT[] fields
+    let updateQuery = `UPDATE spaces 
        SET name = $1, description = $2, address = $3, city = $4, capacity = $5,
-           price_per_hour = $6, amenities = $7, images = $8, owner_id = $9,
-           status = $10, verified = $11, google_maps_url = $12, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $13
-       RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenitiesArray, imagesArray, owner_id, finalStatus, finalVerified, google_maps_url || null, id]
-    );
+           price_per_hour = $6`;
+    
+    let updateValues = [name, description, address, city, capacity, price_per_hour];
+    let paramCount = 7;
+    
+    // Handle amenities - TEXT[]
+    if (amenitiesArray && amenitiesArray.length > 0) {
+      const amenitiesPlaceholders = amenitiesArray.map((_, i) => `$${paramCount + i}`).join(', ');
+      updateQuery += `, amenities = ARRAY[${amenitiesPlaceholders}]::TEXT[]`;
+      updateValues.push(...amenitiesArray);
+      paramCount += amenitiesArray.length;
+    } else {
+      updateQuery += `, amenities = NULL`;
+    }
+    
+    // Handle images - TEXT[]
+    if (imagesArray && imagesArray.length > 0) {
+      const imagesPlaceholders = imagesArray.map((_, i) => `$${paramCount + i}`).join(', ');
+      updateQuery += `, images = ARRAY[${imagesPlaceholders}]::TEXT[]`;
+      updateValues.push(...imagesArray);
+      paramCount += imagesArray.length;
+    } else {
+      updateQuery += `, images = NULL`;
+    }
+    
+    // Add remaining parameters (owner_id, status, verified, id)
+    // Check if google_maps_url column exists before adding it
+    updateQuery += `, owner_id = $${paramCount}, status = $${paramCount + 1}, verified = $${paramCount + 2}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 3} RETURNING *`;
+    updateValues.push(owner_id, finalStatus, finalVerified, id);
+    
+    // Update google_maps_url separately (create column if not exists)
+    try {
+      await pool.query(
+        'ALTER TABLE spaces ADD COLUMN IF NOT EXISTS google_maps_url TEXT'
+      );
+      await pool.query(
+        'UPDATE spaces SET google_maps_url = $1 WHERE id = $2',
+        [google_maps_url || null, id]
+      );
+      console.log('✅ Debug - google_maps_url updated separately');
+    } catch (err) {
+      console.log('⚠️ Could not update google_maps_url:', err.message);
+    }
+    
+    console.log('🔍 Debug - Final UPDATE query:', updateQuery);
+    console.log('🔍 Debug - Final values count:', updateValues.length);
+
+    const result = await pool.query(updateQuery, updateValues);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Space not found' });
