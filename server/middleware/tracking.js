@@ -73,7 +73,9 @@ export const trackPageViewAPI = async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error tracking page view:', error);
-    res.status(500).json({ error: 'Failed to track page view' });
+    // Don't fail the request if tracking fails - just log and return success
+    // This prevents tracking errors from breaking the frontend
+    res.status(200).json({ success: false, error: 'Tracking failed but request succeeded' });
   }
 };
 

@@ -51,13 +51,21 @@ export const getUploadUrl = (path) => {
   
   const trimmedPath = path.trim();
   
-  // Already a full URL
+  // Already a full URL (including Cloudinary URLs)
   if (trimmedPath.startsWith('http://') || trimmedPath.startsWith('https://')) {
     return trimmedPath;
   }
   
-  // Path starts with /uploads/
+  // Check if path contains a full URL after /uploads/ prefix (malformed case)
+  // Example: /uploads/general/https://res.cloudinary.com/...
   if (trimmedPath.startsWith('/uploads/')) {
+    // Check if there's a full URL inside the path
+    const urlMatch = trimmedPath.match(/https?:\/\/[^\s]+/);
+    if (urlMatch) {
+      // Extract and return the full URL
+      return urlMatch[0];
+    }
+    // Normal case: /uploads/general/image.jpg
     return `${API_UPLOAD_BASE}${trimmedPath}`;
   }
   

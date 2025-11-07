@@ -481,6 +481,38 @@ pool.on('error', (err) => {
   } catch (e) {
     console.warn('⚠️ Could not ensure notifications table:', e.message);
   }
+  
+  // Ensure page_views table exists for tracking
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS page_views (
+        id SERIAL PRIMARY KEY,
+        page_path VARCHAR(500) NOT NULL,
+        page_title VARCHAR(500),
+        user_id INTEGER REFERENCES users(id),
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        referrer VARCHAR(500),
+        session_id VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
+    // Create indexes if not exist
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_page_views_path ON page_views(page_path);
+    `).catch(() => {});
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_page_views_created_at ON page_views(created_at);
+    `).catch(() => {});
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_page_views_user_id ON page_views(user_id);
+    `).catch(() => {});
+    
+    console.log('✅ Page views table ensured.');
+  } catch (e) {
+    console.warn('⚠️ Could not ensure page_views table:', e.message);
+  }
 })();
 
 // Ensure optional customer columns on bookings
