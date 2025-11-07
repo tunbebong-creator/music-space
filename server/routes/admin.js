@@ -360,48 +360,51 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     console.log('🔍 Debug - gallery_images received:', typeof gallery_images, gallery_images);
     console.log('🔍 Debug - gallery_images isArray:', Array.isArray(gallery_images));
 
-    // Parse gallery_images - handle both array and JSON string
+    // Parse gallery_images - handle ALL possible formats
     let parsedGalleryImages = null;
-    if (gallery_images !== null && gallery_images !== undefined) {
-      if (Array.isArray(gallery_images)) {
-        // Already an array, use it directly
-        parsedGalleryImages = gallery_images;
-      } else if (typeof gallery_images === 'string') {
-        try {
-          // Try to parse JSON string - handle both "[\"url\"]" and ["url"] formats
-          let jsonStr = gallery_images.trim();
-          // Remove outer quotes if present: "[\"url\"]" -> ["url"]
-          if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
-            jsonStr = jsonStr.slice(1, -1);
-            // Unescape: \" -> "
-            jsonStr = jsonStr.replace(/\\"/g, '"');
-          }
-          const parsed = JSON.parse(jsonStr);
-          parsedGalleryImages = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-        } catch (e) {
-          console.error('❌ Failed to parse gallery_images JSON:', e);
-          console.error('❌ Original value:', gallery_images);
-          // If parsing fails, try treating as single URL
-          parsedGalleryImages = gallery_images ? [gallery_images] : [];
-        }
-      } else {
-        // Other types, convert to array
-        parsedGalleryImages = [gallery_images];
-      }
-    }
     
-    // Ensure it's an array or null for PostgreSQL TEXT[]
-    if (parsedGalleryImages !== null && !Array.isArray(parsedGalleryImages)) {
-      parsedGalleryImages = [parsedGalleryImages];
-    }
-    
-    // If empty array, set to null to avoid issues
-    if (Array.isArray(parsedGalleryImages) && parsedGalleryImages.length === 0) {
+    if (gallery_images === null || gallery_images === undefined || gallery_images === '') {
       parsedGalleryImages = null;
+    } else if (Array.isArray(gallery_images)) {
+      // Already an array - use directly
+      parsedGalleryImages = gallery_images.length > 0 ? gallery_images : null;
+    } else if (typeof gallery_images === 'string') {
+      try {
+        let jsonStr = gallery_images.trim();
+        
+        // Handle double-encoded JSON: "[\"url\"]" -> ["url"]
+        // Step 1: Remove outer quotes if present
+        if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
+          jsonStr = jsonStr.slice(1, -1);
+          // Unescape: \" -> "
+          jsonStr = jsonStr.replace(/\\"/g, '"');
+          jsonStr = jsonStr.replace(/\\\\/g, '\\');
+        }
+        
+        // Step 2: Try to parse as JSON
+        const parsed = JSON.parse(jsonStr);
+        
+        // Step 3: Ensure it's an array
+        if (Array.isArray(parsed)) {
+          parsedGalleryImages = parsed.length > 0 ? parsed : null;
+        } else if (parsed) {
+          parsedGalleryImages = [parsed];
+        } else {
+          parsedGalleryImages = null;
+        }
+      } catch (e) {
+        console.error('❌ Failed to parse gallery_images JSON:', e);
+        console.error('❌ Original value:', gallery_images);
+        // If parsing fails, treat as single URL string
+        parsedGalleryImages = gallery_images ? [gallery_images] : null;
+      }
+    } else {
+      // Other types - convert to array
+      parsedGalleryImages = [gallery_images];
     }
 
-    console.log('🔍 Debug - parsedGalleryImages (final):', parsedGalleryImages);
-    console.log('🔍 Debug - parsedGalleryImages type:', typeof parsedGalleryImages, Array.isArray(parsedGalleryImages));
+    console.log('✅ Debug - parsedGalleryImages (final):', parsedGalleryImages);
+    console.log('✅ Debug - parsedGalleryImages type:', typeof parsedGalleryImages, Array.isArray(parsedGalleryImages));
 
     // Ensure gallery_images is properly formatted for images field
     let imagesValue = parsedGalleryImages || [];
@@ -483,20 +486,38 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
       video_url || null,
       audio_preview || null,
       cover_image || null,
-      parsedGalleryImages, // Use parsed array, PostgreSQL will handle TEXT[] conversion
+      parsedGalleryImages, // Array or null - PostgreSQL TEXT[] accepts JavaScript arrays directly
       id
     ];
     
     console.log('🔍 Debug - Update values for gallery_images:', parsedGalleryImages);
+    console.log('🔍 Debug - Gallery images is array?', Array.isArray(parsedGalleryImages));
     
     try {
-      await pool.query(updateQuery, updateValues);
+      // Use explicit cast to TEXT[] to ensure PostgreSQL understands it
+      const updateQueryWithCast = updateQuery.replace(
+        'gallery_images = $28',
+        'gallery_images = $28::TEXT[]'
+      );
+      
+      await pool.query(updateQueryWithCast, updateValues);
       console.log('✅ Debug - Event updated with additional fields');
     } catch (updateError) {
-      console.error('⚠️ Debug - Some additional fields could not be updated:', updateError.message);
-      console.error('⚠️ Update error details:', updateError);
-      console.error('⚠️ Gallery images value that caused error:', parsedGalleryImages);
-      throw updateError; // Re-throw to be caught by outer catch
+      console.error('❌ Debug - Some additional fields could not be updated:', updateError.message);
+      console.error('❌ Update error details:', updateError);
+      console.error('❌ Gallery images value that caused error:', parsedGalleryImages);
+      console.error('❌ Gallery images type:', typeof parsedGalleryImages);
+      console.error('❌ Gallery images is array:', Array.isArray(parsedGalleryImages));
+      
+      // Try without cast if cast fails
+      try {
+        console.log('🔄 Retrying without explicit cast...');
+        await pool.query(updateQuery, updateValues);
+        console.log('✅ Debug - Event updated without cast');
+      } catch (retryError) {
+        console.error('❌ Retry also failed:', retryError.message);
+        throw updateError; // Re-throw original error
+      }
     }
     
     // Get final event data
