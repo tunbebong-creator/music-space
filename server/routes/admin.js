@@ -464,14 +464,14 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     const e = finalResult.rows[0];
     const finalParsedGalleryImages = parseEventImages(e);
     let parsedCoverImage = e.cover_image;
-    if (!parsedCoverImage && parsedGalleryImages.length > 0) {
-      parsedCoverImage = parsedGalleryImages[0];
+    if (!parsedCoverImage && finalParsedGalleryImages.length > 0) {
+      parsedCoverImage = finalParsedGalleryImages[0];
     }
     
     const formattedEvent = {
       ...e,
       cover_image: parsedCoverImage || null,
-      gallery_images: parsedGalleryImages
+      gallery_images: finalParsedGalleryImages
     };
     
     console.log('✅ Debug - Event updated successfully:', formattedEvent);
