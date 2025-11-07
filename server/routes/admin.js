@@ -219,14 +219,14 @@ router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
     const finalResult = await pool.query('SELECT * FROM events WHERE id = $1', [eventId]);
     const e = finalResult.rows[0];
     const parsedGalleryImages = parseEventImages(e);
-    let cover_image = e.cover_image;
-    if (!cover_image && parsedGalleryImages.length > 0) {
-      cover_image = parsedGalleryImages[0];
+    let parsedCoverImage = e.cover_image;
+    if (!parsedCoverImage && parsedGalleryImages.length > 0) {
+      parsedCoverImage = parsedGalleryImages[0];
     }
     
     const formattedEvent = {
       ...e,
-      cover_image: cover_image || null,
+      cover_image: parsedCoverImage || null,
       gallery_images: parsedGalleryImages
     };
     
@@ -437,16 +437,16 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     // Get final event data
     const finalResult = await pool.query('SELECT * FROM events WHERE id = $1', [id]);
     const e = finalResult.rows[0];
-    const gallery_images = parseEventImages(e);
-    let cover_image = e.cover_image;
-    if (!cover_image && gallery_images.length > 0) {
-      cover_image = gallery_images[0];
+    const parsedGalleryImages = parseEventImages(e);
+    let parsedCoverImage = e.cover_image;
+    if (!parsedCoverImage && parsedGalleryImages.length > 0) {
+      parsedCoverImage = parsedGalleryImages[0];
     }
     
     const formattedEvent = {
       ...e,
-      cover_image: cover_image || null,
-      gallery_images: gallery_images
+      cover_image: parsedCoverImage || null,
+      gallery_images: parsedGalleryImages
     };
     
     console.log('✅ Debug - Event updated successfully:', formattedEvent);
