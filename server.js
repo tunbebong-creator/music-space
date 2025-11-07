@@ -384,14 +384,39 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Neon Database connection - Use DATABASE_URL from environment (Render) or fallback to hardcoded
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Frv90HNpbhjo@ep-muddy-bonus-adx6h9r8-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require',
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
+const hardcodedConnectionString = 'postgresql://neondb_owner:npg_Frv90HNpbhjo@ep-muddy-bonus-adx6h9r8-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
 
-console.log('🔍 Database connection:', process.env.DATABASE_URL ? 'Using DATABASE_URL from environment' : 'Using hardcoded connection string');
+// Function to create pool with given connection string
+const createPool = (connectionString) => {
+  return new Pool({
+    connectionString: connectionString,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+};
+
+// Determine which connection string to use
+// Prefer DATABASE_URL, but will test and fallback if it fails
+let databaseUrl = process.env.DATABASE_URL || hardcodedConnectionString;
+const useEnvUrl = !!process.env.DATABASE_URL;
+
+// Debug: Log connection info (without exposing password)
+if (useEnvUrl) {
+  try {
+    const urlObj = new URL(process.env.DATABASE_URL);
+    console.log('🔍 Database connection: DATABASE_URL found in environment');
+    console.log('🔍 Database host:', urlObj.hostname);
+    console.log('🔍 Database database:', urlObj.pathname.replace('/', ''));
+  } catch (e) {
+    console.log('⚠️ DATABASE_URL format invalid, using hardcoded fallback');
+    databaseUrl = hardcodedConnectionString;
+  }
+} else {
+  console.log('🔍 Database connection: DATABASE_URL not set, using hardcoded connection string');
+}
+
+let pool = createPool(databaseUrl);
 
 // Test database connection
 pool.on('connect', () => {
@@ -402,7 +427,7 @@ pool.on('error', (err) => {
   console.error('❌ Database connection error:', err);
 });
 
-// Test connection immediately
+// Test connection immediately and fallback if needed
 (async () => {
   try {
     console.log('🔄 Testing Neon database connection...');
@@ -411,6 +436,30 @@ pool.on('error', (err) => {
     console.log('🕐 Current time from Neon:', result.rows[0].current_time);
   } catch (error) {
     console.error('❌ Failed to connect to Neon database:', error.message);
+    
+    // If using DATABASE_URL and it failed, try fallback to hardcoded
+    if (useEnvUrl && databaseUrl !== hardcodedConnectionString) {
+      console.log('🔄 Attempting fallback to hardcoded connection string...');
+      try {
+        // Close old pool
+        await pool.end().catch(() => {});
+        
+        // Create new pool with hardcoded string
+        pool = createPool(hardcodedConnectionString);
+        global.pool = pool;
+        
+        // Test fallback connection
+        const fallbackResult = await pool.query('SELECT NOW() as current_time');
+        console.log('✅ Fallback connection successful!');
+        console.log('🕐 Current time from Neon (fallback):', fallbackResult.rows[0].current_time);
+        console.log('⚠️ Using hardcoded connection string instead of DATABASE_URL');
+        console.log('💡 Please check DATABASE_URL in Render environment variables');
+        console.log('💡 DATABASE_URL may be incorrect or password may have changed');
+      } catch (fallbackError) {
+        console.error('❌ Fallback connection also failed:', fallbackError.message);
+        console.error('❌ Both DATABASE_URL and hardcoded connection failed');
+      }
+    }
   }
 })();
 
