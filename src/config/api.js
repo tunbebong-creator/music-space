@@ -1,8 +1,14 @@
 // API Configuration
 // Use environment variable or default to Render backend URL
 // NOTE: Backend is actually running on usic-space-server.onrender.com (without 'm')
-const defaultApiUrl = 'https://usic-space-server.onrender.com/api';
-const defaultUploadBase = 'https://usic-space-server.onrender.com';
+// For local development, use localhost:3001
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const defaultApiUrl = isLocalhost 
+  ? 'http://localhost:3001/api' 
+  : 'https://usic-space-server.onrender.com/api';
+const defaultUploadBase = isLocalhost
+  ? 'http://localhost:3001'
+  : 'https://usic-space-server.onrender.com';
 
 // Use environment variable if provided, otherwise use default
 let envApiUrl = import.meta.env.VITE_API_URL;
