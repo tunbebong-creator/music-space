@@ -24,11 +24,11 @@ services:
       - key: SMTP_PASS
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
-        sync: false
+        value: dz9wlgu7e
       - key: CLOUDINARY_API_KEY
-        sync: false
+        value: 664422284934169
       - key: CLOUDINARY_API_SECRET
-        sync: false
+        sync: false  # Cần thêm API secret vào Render Dashboard manually
 
   # Frontend Static Site
   - type: web
