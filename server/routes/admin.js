@@ -341,27 +341,50 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     } = req.body;
 
     console.log('🔍 Debug - gallery_images received:', typeof gallery_images, gallery_images);
+    console.log('🔍 Debug - gallery_images isArray:', Array.isArray(gallery_images));
 
     // Parse gallery_images - handle both array and JSON string
     let parsedGalleryImages = null;
-    if (gallery_images) {
+    if (gallery_images !== null && gallery_images !== undefined) {
       if (Array.isArray(gallery_images)) {
+        // Already an array, use it directly
         parsedGalleryImages = gallery_images;
       } else if (typeof gallery_images === 'string') {
         try {
-          // Try to parse JSON string
-          const parsed = JSON.parse(gallery_images);
-          parsedGalleryImages = Array.isArray(parsed) ? parsed : [];
+          // Try to parse JSON string - handle both "[\"url\"]" and ["url"] formats
+          let jsonStr = gallery_images.trim();
+          // Remove outer quotes if present: "[\"url\"]" -> ["url"]
+          if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
+            jsonStr = jsonStr.slice(1, -1);
+            // Unescape: \" -> "
+            jsonStr = jsonStr.replace(/\\"/g, '"');
+          }
+          const parsed = JSON.parse(jsonStr);
+          parsedGalleryImages = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
         } catch (e) {
           console.error('❌ Failed to parse gallery_images JSON:', e);
-          parsedGalleryImages = [];
+          console.error('❌ Original value:', gallery_images);
+          // If parsing fails, try treating as single URL
+          parsedGalleryImages = gallery_images ? [gallery_images] : [];
         }
       } else {
-        parsedGalleryImages = [];
+        // Other types, convert to array
+        parsedGalleryImages = [gallery_images];
       }
     }
+    
+    // Ensure it's an array or null for PostgreSQL TEXT[]
+    if (parsedGalleryImages !== null && !Array.isArray(parsedGalleryImages)) {
+      parsedGalleryImages = [parsedGalleryImages];
+    }
+    
+    // If empty array, set to null to avoid issues
+    if (Array.isArray(parsedGalleryImages) && parsedGalleryImages.length === 0) {
+      parsedGalleryImages = null;
+    }
 
-    console.log('🔍 Debug - parsedGalleryImages:', parsedGalleryImages);
+    console.log('🔍 Debug - parsedGalleryImages (final):', parsedGalleryImages);
+    console.log('🔍 Debug - parsedGalleryImages type:', typeof parsedGalleryImages, Array.isArray(parsedGalleryImages));
 
     // Ensure gallery_images is properly formatted for images field
     let imagesValue = parsedGalleryImages || [];
