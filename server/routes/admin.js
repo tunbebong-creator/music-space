@@ -407,9 +407,11 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     console.log('✅ Debug - parsedGalleryImages type:', typeof parsedGalleryImages, Array.isArray(parsedGalleryImages));
 
     // Ensure gallery_images is properly formatted for images field
+    // images field is TEXT (stores JSON string), gallery_images is TEXT[] (stores array)
     let imagesValue = parsedGalleryImages || [];
     
     // Update basic fields first, including images
+    // images field stores JSON string for backward compatibility
     const basicResult = await pool.query(
       `UPDATE events 
        SET title = $1, description = $2, event_date = $3, duration_hours = $4, 
@@ -417,7 +419,7 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
            images = $9, updated_at = CURRENT_TIMESTAMP
        WHERE id = $10
        RETURNING *`,
-      [title, description, event_date, duration_hours, max_participants, price, space_id, organizer_id, JSON.stringify(imagesValue), id]
+      [title, description, event_date, duration_hours, max_participants, price, space_id, organizer_id, Array.isArray(imagesValue) ? JSON.stringify(imagesValue) : imagesValue, id]
     );
 
     if (basicResult.rows.length === 0) {
@@ -494,10 +496,24 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     console.log('🔍 Debug - Gallery images is array?', Array.isArray(parsedGalleryImages));
     
     try {
-      // Use explicit cast to TEXT[] to ensure PostgreSQL understands it
+      // PostgreSQL TEXT[] accepts JavaScript arrays directly via pg library
+      // But we need to ensure it's properly formatted
+      // If parsedGalleryImages is null, set to NULL in SQL
+      // If it's an array, pg library will convert it automatically
+      
+      // Replace null with SQL NULL handling
+      const finalGalleryImages = parsedGalleryImages === null ? null : parsedGalleryImages;
+      
+      console.log('🔍 Debug - Final gallery_images for SQL:', finalGalleryImages);
+      console.log('🔍 Debug - Is array?', Array.isArray(finalGalleryImages));
+      
+      // Update the value in updateValues array
+      updateValues[27] = finalGalleryImages; // gallery_images is at index 27 (0-based: $28 = index 27)
+      
+      // Use explicit cast to TEXT[] - this is the correct way for PostgreSQL
       const updateQueryWithCast = updateQuery.replace(
         'gallery_images = $28',
-        'gallery_images = $28::TEXT[]'
+        'gallery_images = CASE WHEN $28 IS NULL THEN NULL ELSE $28::TEXT[] END'
       );
       
       await pool.query(updateQueryWithCast, updateValues);
@@ -509,11 +525,22 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
       console.error('❌ Gallery images type:', typeof parsedGalleryImages);
       console.error('❌ Gallery images is array:', Array.isArray(parsedGalleryImages));
       
-      // Try without cast if cast fails
+      // If cast fails, try setting to NULL and update separately
       try {
-        console.log('🔄 Retrying without explicit cast...');
-        await pool.query(updateQuery, updateValues);
-        console.log('✅ Debug - Event updated without cast');
+        console.log('🔄 Retrying with NULL gallery_images...');
+        const updateValuesNull = [...updateValues];
+        updateValuesNull[27] = null; // Set gallery_images to NULL
+        await pool.query(updateQuery, updateValuesNull);
+        
+        // Then update gallery_images separately if we have data
+        if (parsedGalleryImages && Array.isArray(parsedGalleryImages) && parsedGalleryImages.length > 0) {
+          console.log('🔄 Updating gallery_images separately...');
+          await pool.query(
+            'UPDATE events SET gallery_images = $1::TEXT[] WHERE id = $2',
+            [parsedGalleryImages, id]
+          );
+        }
+        console.log('✅ Debug - Event updated with workaround');
       } catch (retryError) {
         console.error('❌ Retry also failed:', retryError.message);
         throw updateError; // Re-throw original error
