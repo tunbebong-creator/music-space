@@ -375,13 +375,15 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Neon Database connection - SIMPLE
+// Neon Database connection - Use DATABASE_URL from environment (Render) or fallback to hardcoded
 const pool = new Pool({
-  connectionString: 'postgresql://neondb_owner:npg_Frv90HNpbhjo@ep-muddy-bonus-adx6h9r8-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require',
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Frv90HNpbhjo@ep-muddy-bonus-adx6h9r8-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require',
   ssl: {
     rejectUnauthorized: false
   }
 });
+
+console.log('🔍 Database connection:', process.env.DATABASE_URL ? 'Using DATABASE_URL from environment' : 'Using hardcoded connection string');
 
 // Test database connection
 pool.on('connect', () => {

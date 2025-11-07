@@ -4,13 +4,21 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Neon Database connection
-const pool = new Pool({
-  connectionString: 'postgresql://neondb_owner:npg_Frv90HNpbhjo@ep-muddy-bonus-adx6h9r8-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require',
-  ssl: {
-    rejectUnauthorized: false
+// Neon Database connection - Use DATABASE_URL from environment (Render) or fallback to hardcoded
+// Use global.pool if available (from server.js), otherwise create new pool
+const getPool = () => {
+  if (global.pool) {
+    return global.pool;
   }
-});
+  return new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Frv90HNpbhjo@ep-muddy-bonus-adx6h9r8-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require',
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+};
+
+const pool = getPool();
 
 // Admin middleware - check if user is admin
 const requireAdmin = (req, res, next) => {
