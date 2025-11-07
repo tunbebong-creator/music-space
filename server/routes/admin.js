@@ -340,11 +340,31 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
       gallery_images, space_id, organizer_id, drink_option, drink_price
     } = req.body;
 
-    // Ensure gallery_images is properly formatted for images field
-    let imagesValue = [];
+    console.log('🔍 Debug - gallery_images received:', typeof gallery_images, gallery_images);
+
+    // Parse gallery_images - handle both array and JSON string
+    let parsedGalleryImages = null;
     if (gallery_images) {
-      imagesValue = Array.isArray(gallery_images) ? gallery_images : (typeof gallery_images === 'string' ? JSON.parse(gallery_images) : []);
+      if (Array.isArray(gallery_images)) {
+        parsedGalleryImages = gallery_images;
+      } else if (typeof gallery_images === 'string') {
+        try {
+          // Try to parse JSON string
+          const parsed = JSON.parse(gallery_images);
+          parsedGalleryImages = Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          console.error('❌ Failed to parse gallery_images JSON:', e);
+          parsedGalleryImages = [];
+        }
+      } else {
+        parsedGalleryImages = [];
+      }
     }
+
+    console.log('🔍 Debug - parsedGalleryImages:', parsedGalleryImages);
+
+    // Ensure gallery_images is properly formatted for images field
+    let imagesValue = parsedGalleryImages || [];
     
     // Update basic fields first, including images
     const basicResult = await pool.query(
@@ -423,9 +443,11 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
       video_url || null,
       audio_preview || null,
       cover_image || null,
-      (gallery_images && Array.isArray(gallery_images)) ? gallery_images : (gallery_images ? (typeof gallery_images === 'string' ? JSON.parse(gallery_images) : []) : null),
+      parsedGalleryImages, // Use parsed array, PostgreSQL will handle TEXT[] conversion
       id
     ];
+    
+    console.log('🔍 Debug - Update values for gallery_images:', parsedGalleryImages);
     
     try {
       await pool.query(updateQuery, updateValues);
@@ -433,6 +455,7 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     } catch (updateError) {
       console.error('⚠️ Debug - Some additional fields could not be updated:', updateError.message);
       console.error('⚠️ Update error details:', updateError);
+      console.error('⚠️ Gallery images value that caused error:', parsedGalleryImages);
       throw updateError; // Re-throw to be caught by outer catch
     }
     
