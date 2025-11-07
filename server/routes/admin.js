@@ -707,6 +707,103 @@ router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Get page views statistics (admin)
+router.get('/analytics/page-views', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { days = 30, page_path } = req.query;
+    
+    const daysInt = parseInt(days) || 30;
+    
+    // Get daily stats
+    let dailyStatsQuery, dailyStatsParams;
+    if (page_path) {
+      dailyStatsQuery = `
+        SELECT 
+          DATE(created_at) as date,
+          COUNT(*) as total_views,
+          COUNT(DISTINCT session_id) as unique_sessions,
+          COUNT(DISTINCT ip_address) as unique_visitors,
+          COUNT(DISTINCT user_id) as unique_users
+        FROM page_views
+        WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' * $1
+        AND page_path = $2
+        GROUP BY DATE(created_at)
+        ORDER BY date DESC
+      `;
+      dailyStatsParams = [daysInt, page_path];
+    } else {
+      dailyStatsQuery = `
+        SELECT 
+          DATE(created_at) as date,
+          COUNT(*) as total_views,
+          COUNT(DISTINCT session_id) as unique_sessions,
+          COUNT(DISTINCT ip_address) as unique_visitors,
+          COUNT(DISTINCT user_id) as unique_users
+        FROM page_views
+        WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' * $1
+        GROUP BY DATE(created_at)
+        ORDER BY date DESC
+      `;
+      dailyStatsParams = [daysInt];
+    }
+    
+    const dailyStats = await pool.query(dailyStatsQuery, dailyStatsParams);
+    
+    // Get page stats
+    const pageStatsQuery = `
+      SELECT 
+        page_path,
+        COUNT(*) as total_views,
+        COUNT(DISTINCT session_id) as unique_sessions,
+        COUNT(DISTINCT ip_address) as unique_visitors,
+        MAX(created_at) as last_visited
+      FROM page_views
+      WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' * $1
+      GROUP BY page_path
+      ORDER BY total_views DESC
+      LIMIT 50
+    `;
+    
+    const pageStats = await pool.query(pageStatsQuery, [daysInt]);
+    
+    // Get overall stats
+    const overallStatsQuery = `
+      SELECT 
+        COUNT(*) as total_views,
+        COUNT(DISTINCT session_id) as total_sessions,
+        COUNT(DISTINCT ip_address) as total_visitors,
+        COUNT(DISTINCT user_id) as total_users,
+        COUNT(DISTINCT DATE(created_at)) as active_days
+      FROM page_views
+      WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' * $1
+    `;
+    
+    const overallStats = await pool.query(overallStatsQuery, [daysInt]);
+    
+    // Get today's stats
+    const todayStatsQuery = `
+      SELECT 
+        COUNT(*) as views_today,
+        COUNT(DISTINCT session_id) as sessions_today,
+        COUNT(DISTINCT ip_address) as visitors_today
+      FROM page_views
+      WHERE DATE(created_at) = CURRENT_DATE
+    `;
+    
+    const todayStats = await pool.query(todayStatsQuery);
+    
+    res.json({
+      daily: dailyStats.rows,
+      pages: pageStats.rows,
+      overall: overallStats.rows[0],
+      today: todayStats.rows[0]
+    });
+  } catch (error) {
+    console.error('Error fetching page views stats:', error);
+    res.status(500).json({ error: 'Failed to fetch page views statistics' });
+  }
+});
+
 // Delete space (admin)
 router.delete('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {

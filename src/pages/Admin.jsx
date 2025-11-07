@@ -33,6 +33,7 @@ import {
 import ChatPanel from "@/components/ChatPanel";
 import Pagination from "@/components/Pagination";
 import { format } from "date-fns";
+import { vi } from "date-fns/locale";
 import { API_BASE_URL, getUploadUrl } from '@/config/api.js';
 
 const API_BASE = API_BASE_URL.replace('/api', '');
@@ -306,6 +307,12 @@ export default function Admin() {
     enabled: !!user && user.role === 'admin' && activeTab === 'bookings',
   });
 
+  const { data: analyticsData, isLoading: analyticsLoading, refetch: refetchAnalytics } = useQuery({
+    queryKey: ['admin-analytics'],
+    queryFn: () => fetchWithAuth('/api/admin/analytics/page-views?days=30'),
+    enabled: !!user && user.role === 'admin' && activeTab === 'analytics',
+  });
+
   const { data: contactData, isLoading: contactLoading, refetch: refetchContact } = useQuery({
     queryKey: ['admin-contact'],
     queryFn: () => {
@@ -458,6 +465,7 @@ export default function Admin() {
 
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: BarChart3 },
+    { id: "analytics", label: "Lượt truy cập", icon: Eye },
     { id: "users", label: "Quản lý Users", icon: Users },
     { id: "spaces", label: "Quản lý Spaces", icon: MapPin },
     { id: "events", label: "Quản lý Events", icon: Calendar },
@@ -876,6 +884,121 @@ export default function Admin() {
                 </div>
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {/* Analytics Tab */}
+        {activeTab === "analytics" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {analyticsLoading ? (
+              <div className="text-center py-10">Đang tải...</div>
+            ) : (
+              <>
+                {/* Overall Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500 mb-1">Tổng lượt xem (30 ngày)</p>
+                        <p className="text-3xl font-bold text-gray-900">{analyticsData?.overall?.total_views || 0}</p>
+                      </div>
+                      <Eye className="w-8 h-8 text-blue-500" />
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500 mb-1">Lượt truy cập hôm nay</p>
+                        <p className="text-3xl font-bold text-gray-900">{analyticsData?.today?.views_today || 0}</p>
+                      </div>
+                      <TrendingUp className="w-8 h-8 text-green-500" />
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500 mb-1">Người dùng duy nhất</p>
+                        <p className="text-3xl font-bold text-gray-900">{analyticsData?.overall?.total_visitors || 0}</p>
+                      </div>
+                      <Users className="w-8 h-8 text-purple-500" />
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500 mb-1">Sessions hôm nay</p>
+                        <p className="text-3xl font-bold text-gray-900">{analyticsData?.today?.sessions_today || 0}</p>
+                      </div>
+                      <Activity className="w-8 h-8 text-orange-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Daily Stats Chart */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Lượt truy cập theo ngày (30 ngày gần nhất)</h3>
+                  <div className="space-y-2">
+                    {analyticsData?.daily?.length > 0 ? (
+                      analyticsData.daily.slice(0, 30).map((day, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <span className="text-sm font-medium text-gray-700 w-24">
+                              {format(new Date(day.date), 'dd/MM/yyyy', { locale: vi })}
+                            </span>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div 
+                                  className="h-6 bg-blue-500 rounded"
+                                  style={{ width: `${Math.min((day.total_views / (analyticsData.overall?.total_views || 1)) * 100, 100)}%` }}
+                                />
+                                <span className="text-sm font-semibold text-gray-900">{day.total_views}</span>
+                              </div>
+                              <div className="flex gap-4 text-xs text-gray-500">
+                                <span>Sessions: {day.unique_sessions}</span>
+                                <span>Visitors: {day.unique_visitors}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-4">Chưa có dữ liệu</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Top Pages */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Trang được truy cập nhiều nhất</h3>
+                  <div className="space-y-2">
+                    {analyticsData?.pages?.length > 0 ? (
+                      analyticsData.pages.slice(0, 20).map((page, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{page.page_path}</p>
+                            <p className="text-sm text-gray-500">
+                              {page.total_views} lượt xem • {page.unique_sessions} sessions • {page.unique_visitors} visitors
+                            </p>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {format(new Date(page.last_visited), 'dd/MM/yyyy HH:mm')}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-4">Chưa có dữ liệu</p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </motion.div>
         )}
 

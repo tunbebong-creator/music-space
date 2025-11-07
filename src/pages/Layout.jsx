@@ -63,6 +63,39 @@ export default function Layout({ children, currentPageName }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [location.pathname]);
 
+  // Track page views
+  React.useEffect(() => {
+    const trackView = async () => {
+      try {
+        // Get or create session ID
+        let sessionId = sessionStorage.getItem('session_id');
+        if (!sessionId) {
+          sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          sessionStorage.setItem('session_id', sessionId);
+        }
+
+        const apiBase = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://usic-space-server.onrender.com';
+        await fetch(`${apiBase}/api/track-page-view`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Session-ID': sessionId
+          },
+          body: JSON.stringify({
+            page_path: location.pathname,
+            page_title: document.title
+          })
+        });
+      } catch (error) {
+        // Silently fail - don't interrupt user experience
+        console.debug('Page view tracking failed:', error);
+      }
+    };
+    
+    // Track all pages including admin
+    trackView();
+  }, [location.pathname]);
+
   // NEW: Check subscription status when user changes
   React.useEffect(() => {
     const checkSubscription = async () => {

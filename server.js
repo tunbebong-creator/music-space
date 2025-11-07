@@ -9,6 +9,7 @@ import fs from 'fs';
 import adminRoutes from './server/routes/admin.js';
 import uploadRoutes from './server/routes/upload.js';
 import { uploadMultipleImages, uploadSingleImage, handleUploadError, deleteFile, getFileUrl } from './server/middleware/upload.js';
+import { trackPageViewAPI } from './server/middleware/tracking.js';
 
 dotenv.config();
 
@@ -455,9 +456,16 @@ async function requirePartnerOrAdmin(req, res, next) {
 
 // Routes
 
+// Make pool available globally for middleware
+global.pool = pool;
+
 // Mount admin routes FIRST to avoid conflicts with other /api/admin/* routes
 // Admin routes must be mounted before individual admin routes in server.js
 app.use('/api/admin', adminRoutes);
+app.use('/api/upload', uploadRoutes);
+
+// Track page views API endpoint
+app.post('/api/track-page-view', trackPageViewAPI);
 
 // Health check with database test
 app.get('/api/health', async (req, res) => {
