@@ -628,6 +628,9 @@ router.post('/spaces', authenticateToken, requireAdmin, async (req, res) => {
 router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('🔍 Debug - Updating space ID:', id);
+    console.log('🔍 Debug - Request body:', req.body);
+    
     const {
       name,
       description,
@@ -653,6 +656,36 @@ router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
     const finalStatus = status !== undefined && status !== null ? status : currentSpace.rows[0].status;
     const finalVerified = verified !== undefined && verified !== null ? verified : currentSpace.rows[0].verified;
 
+    // Process amenities - ensure it's an array
+    let amenitiesArray = [];
+    if (amenities) {
+      if (Array.isArray(amenities)) {
+        amenitiesArray = amenities;
+      } else if (typeof amenities === 'string') {
+        amenitiesArray = amenities.split(',').map(a => a.trim()).filter(a => a);
+      }
+    }
+
+    // Process images - ensure it's an array
+    let imagesArray = [];
+    if (images) {
+      if (Array.isArray(images)) {
+        imagesArray = images;
+      } else if (typeof images === 'string') {
+        try {
+          imagesArray = JSON.parse(images);
+        } catch {
+          imagesArray = [images];
+        }
+      }
+    }
+
+    console.log('🔍 Debug - Processed data:', {
+      amenitiesArray,
+      imagesArray,
+      google_maps_url
+    });
+
     const result = await pool.query(
       `UPDATE spaces 
        SET name = $1, description = $2, address = $3, city = $4, capacity = $5,
@@ -660,7 +693,7 @@ router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
            status = $10, verified = $11, google_maps_url = $12, updated_at = CURRENT_TIMESTAMP
        WHERE id = $13
        RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, finalStatus, finalVerified, google_maps_url || null, id]
+      [name, description, address, city, capacity, price_per_hour, amenitiesArray, imagesArray, owner_id, finalStatus, finalVerified, google_maps_url || null, id]
     );
 
     if (result.rows.length === 0) {
