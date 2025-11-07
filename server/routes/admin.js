@@ -462,7 +462,7 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     // Get final event data
     const finalResult = await pool.query('SELECT * FROM events WHERE id = $1', [id]);
     const e = finalResult.rows[0];
-    const parsedGalleryImages = parseEventImages(e);
+    const finalParsedGalleryImages = parseEventImages(e);
     let parsedCoverImage = e.cover_image;
     if (!parsedCoverImage && parsedGalleryImages.length > 0) {
       parsedCoverImage = parsedGalleryImages[0];
