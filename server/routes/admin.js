@@ -496,27 +496,38 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     console.log('🔍 Debug - Gallery images is array?', Array.isArray(parsedGalleryImages));
     
     try {
-      // PostgreSQL TEXT[] accepts JavaScript arrays directly via pg library
-      // But we need to ensure it's properly formatted
-      // If parsedGalleryImages is null, set to NULL in SQL
-      // If it's an array, pg library will convert it automatically
+      // PostgreSQL TEXT[] - pg library should handle JavaScript arrays automatically
+      // But if it doesn't work, we'll use ARRAY constructor in SQL
       
-      // Replace null with SQL NULL handling
-      const finalGalleryImages = parsedGalleryImages === null ? null : parsedGalleryImages;
+      let finalQuery = updateQuery;
+      let finalValues = [...updateValues];
       
-      console.log('🔍 Debug - Final gallery_images for SQL:', finalGalleryImages);
-      console.log('🔍 Debug - Is array?', Array.isArray(finalGalleryImages));
+      if (parsedGalleryImages === null) {
+        // Set to NULL
+        finalValues[27] = null;
+        finalQuery = finalQuery.replace('gallery_images = $28', 'gallery_images = NULL');
+      } else if (Array.isArray(parsedGalleryImages) && parsedGalleryImages.length > 0) {
+        // Use ARRAY constructor - this is the most reliable way
+        // Build ARRAY['url1', 'url2', 'url3'] format
+        const arrayPlaceholders = parsedGalleryImages.map((_, i) => `$${28 + i}`).join(', ');
+        finalQuery = finalQuery.replace(
+          'gallery_images = $28',
+          `gallery_images = ARRAY[${arrayPlaceholders}]::TEXT[]`
+        );
+        // Insert array elements into values array
+        finalValues.splice(27, 1, ...parsedGalleryImages);
+        // Adjust all subsequent parameter numbers
+        finalQuery = finalQuery.replace(/\$29/g, `$${28 + parsedGalleryImages.length}`);
+      } else {
+        // Empty array or invalid - set to NULL
+        finalValues[27] = null;
+        finalQuery = finalQuery.replace('gallery_images = $28', 'gallery_images = NULL');
+      }
       
-      // Update the value in updateValues array
-      updateValues[27] = finalGalleryImages; // gallery_images is at index 27 (0-based: $28 = index 27)
+      console.log('🔍 Debug - Final query (gallery_images part):', finalQuery.match(/gallery_images = .*$/m)?.[0]);
+      console.log('🔍 Debug - Final values count:', finalValues.length);
       
-      // Use explicit cast to TEXT[] - this is the correct way for PostgreSQL
-      const updateQueryWithCast = updateQuery.replace(
-        'gallery_images = $28',
-        'gallery_images = CASE WHEN $28 IS NULL THEN NULL ELSE $28::TEXT[] END'
-      );
-      
-      await pool.query(updateQueryWithCast, updateValues);
+      await pool.query(finalQuery, finalValues);
       console.log('✅ Debug - Event updated with additional fields');
     } catch (updateError) {
       console.error('❌ Debug - Some additional fields could not be updated:', updateError.message);
