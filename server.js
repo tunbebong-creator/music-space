@@ -1710,9 +1710,9 @@ app.post('/api/spaces', authenticateToken, requirePartnerOrAdmin, optionalUpload
     const imagesArray = Array.isArray(images) ? images : (images ? [images] : []);
     
     const result = await pool.query(
-      `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenitiesArray, imagesArray, req.user.id, 'pending']
+      `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status, google_maps_url) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [name, description, address, city, capacity, price_per_hour, amenitiesArray, imagesArray, req.user.id, 'pending', google_maps_url || null]
     );
 
     console.log('✅ Space created successfully:', result.rows[0]);
@@ -1737,7 +1737,7 @@ app.post('/api/spaces', authenticateToken, requirePartnerOrAdmin, optionalUpload
 app.put('/api/spaces/:id', authenticateToken, requirePartnerOrAdmin, uploadMultipleImages, handleUploadError, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, address, city, capacity, price_per_hour, amenities, status } = req.body;
+    const { name, description, address, city, capacity, price_per_hour, amenities, status, google_maps_url } = req.body;
 
     // Kiểm tra quyền sở hữu
     const spaceResult = await pool.query('SELECT owner_id, images FROM spaces WHERE id = $1', [id]);
@@ -1766,9 +1766,9 @@ app.put('/api/spaces/:id', authenticateToken, requirePartnerOrAdmin, uploadMulti
 
     const result = await pool.query(
       `UPDATE spaces SET name = $1, description = $2, address = $3, city = $4, capacity = $5, 
-       price_per_hour = $6, amenities = $7, images = $8, status = $9, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $10 RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenitiesArray, JSON.stringify(images), status, id]
+       price_per_hour = $6, amenities = $7, images = $8, status = $9, google_maps_url = $10, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $11 RETURNING *`,
+      [name, description, address, city, capacity, price_per_hour, amenitiesArray, JSON.stringify(images), status, google_maps_url || null, id]
     );
 
     res.json(result.rows[0]);
@@ -1918,12 +1918,24 @@ app.get('/api/events', async (req, res) => {
     ]);
 
     const mapped = eventsResult.rows.map((e) => {
-      const firstImage = Array.isArray(e.cover_image) ? e.cover_image[0] : (Array.isArray(e.images) ? e.images[0] : (Array.isArray(e.gallery_images) ? e.gallery_images[0] : null));
-      const rawCover = e.cover_image || firstImage || null;
+      // Parse gallery images
+      const gallery_images = parseEventImages(e);
+      
+      // Get cover image
+      let cover_image = e.cover_image;
+      if (!cover_image && gallery_images.length > 0) {
+        cover_image = gallery_images[0];
+      }
+      
+      const firstImage = cover_image || (gallery_images.length > 0 ? gallery_images[0] : null);
+      const rawCover = cover_image || firstImage || null;
       const image_url = rawCover ? (String(rawCover).startsWith('http') ? rawCover : `${req.protocol}://${req.get('host')}${rawCover}`) : null;
+      
       return {
         ...e,
         image_url,
+        cover_image: cover_image || null,
+        gallery_images: gallery_images,
         date: e.event_date,
         time: e.start_time
       };
@@ -1944,6 +1956,41 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+// Helper function to parse images field from database
+const parseEventImages = (e) => {
+  let gallery_images = [];
+  
+  // Try to get gallery_images from various sources
+  if (e.gallery_images) {
+    if (Array.isArray(e.gallery_images)) {
+      gallery_images = e.gallery_images;
+    } else if (typeof e.gallery_images === 'string') {
+      try {
+        gallery_images = JSON.parse(e.gallery_images);
+        if (!Array.isArray(gallery_images)) gallery_images = [];
+      } catch {
+        gallery_images = [];
+      }
+    }
+  }
+  
+  // If gallery_images is empty, try to parse from images field
+  if (gallery_images.length === 0 && e.images) {
+    if (Array.isArray(e.images)) {
+      gallery_images = e.images;
+    } else if (typeof e.images === 'string') {
+      try {
+        gallery_images = JSON.parse(e.images);
+        if (!Array.isArray(gallery_images)) gallery_images = [];
+      } catch {
+        gallery_images = [];
+      }
+    }
+  }
+  
+  return gallery_images;
+};
+
 // Get single event by ID
 app.get('/api/events/:id', async (req, res) => {
   try {
@@ -1962,10 +2009,29 @@ app.get('/api/events/:id', async (req, res) => {
     }
 
     const e = result.rows[0];
-    const firstImage = Array.isArray(e.cover_image) ? e.cover_image[0] : (Array.isArray(e.images) ? e.images[0] : (Array.isArray(e.gallery_images) ? e.gallery_images[0] : null));
-    const rawCover = e.cover_image || firstImage || null;
+    
+    // Parse gallery images
+    const gallery_images = parseEventImages(e);
+    
+    // Get cover image
+    let cover_image = e.cover_image;
+    if (!cover_image && gallery_images.length > 0) {
+      cover_image = gallery_images[0];
+    }
+    
+    const firstImage = cover_image || (gallery_images.length > 0 ? gallery_images[0] : null);
+    const rawCover = cover_image || firstImage || null;
     const image_url = rawCover ? (String(rawCover).startsWith('http') ? rawCover : `${req.protocol}://${req.get('host')}${rawCover}`) : null;
-    const mapped = { ...e, image_url, date: e.event_date, time: e.start_time };
+    
+    const mapped = { 
+      ...e, 
+      image_url,
+      cover_image: cover_image || null,
+      gallery_images: gallery_images,
+      date: e.event_date, 
+      time: e.start_time 
+    };
+    
     res.json(mapped);
   } catch (error) {
     console.error('Error fetching event:', error);

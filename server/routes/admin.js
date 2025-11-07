@@ -58,6 +58,41 @@ const requireAdminOrPartner = async (req, res, next) => {
   return res.status(403).json({ error: 'Admin or partner access required' });
 };
 
+// Helper function to parse images field from database
+const parseEventImages = (e) => {
+  let gallery_images = [];
+  
+  // Try to get gallery_images from various sources
+  if (e.gallery_images) {
+    if (Array.isArray(e.gallery_images)) {
+      gallery_images = e.gallery_images;
+    } else if (typeof e.gallery_images === 'string') {
+      try {
+        gallery_images = JSON.parse(e.gallery_images);
+        if (!Array.isArray(gallery_images)) gallery_images = [];
+      } catch {
+        gallery_images = [];
+      }
+    }
+  }
+  
+  // If gallery_images is empty, try to parse from images field
+  if (gallery_images.length === 0 && e.images) {
+    if (Array.isArray(e.images)) {
+      gallery_images = e.images;
+    } else if (typeof e.images === 'string') {
+      try {
+        gallery_images = JSON.parse(e.images);
+        if (!Array.isArray(gallery_images)) gallery_images = [];
+      } catch {
+        gallery_images = [];
+      }
+    }
+  }
+  
+  return gallery_images;
+};
+
 // Create new event (admin)
 router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -83,6 +118,12 @@ router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
       ) RETURNING *
     `;
 
+    // Ensure gallery_images is properly formatted
+    let imagesValue = [];
+    if (gallery_images) {
+      imagesValue = Array.isArray(gallery_images) ? gallery_images : (typeof gallery_images === 'string' ? JSON.parse(gallery_images) : []);
+    }
+    
     const values = [
       title || 'Untitled Event',
       description || '',
@@ -94,7 +135,7 @@ router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
       organizer_id || 1,
       'pending',
       false,
-      gallery_images || []
+      JSON.stringify(imagesValue) // Store as JSON string
     ];
 
     console.log('🔍 Debug - Executing query with values:', values);
@@ -176,8 +217,21 @@ router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
     
     // Get final event data
     const finalResult = await pool.query('SELECT * FROM events WHERE id = $1', [eventId]);
-    console.log('✅ Debug - Event created successfully:', finalResult.rows[0]);
-    res.status(201).json(finalResult.rows[0]);
+    const e = finalResult.rows[0];
+    const gallery_images = parseEventImages(e);
+    let cover_image = e.cover_image;
+    if (!cover_image && gallery_images.length > 0) {
+      cover_image = gallery_images[0];
+    }
+    
+    const formattedEvent = {
+      ...e,
+      cover_image: cover_image || null,
+      gallery_images: gallery_images
+    };
+    
+    console.log('✅ Debug - Event created successfully:', formattedEvent);
+    res.status(201).json(formattedEvent);
   } catch (error) {
     console.error('❌ Error creating event:', error);
     console.error('❌ Error details:', error.message);
@@ -221,7 +275,22 @@ router.get('/events', authenticateToken, requireAdminOrPartner, async (req, res)
     }
     query += ` ORDER BY e.created_at DESC`;
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    
+    // Parse images for each event
+    const mapped = result.rows.map((e) => {
+      const gallery_images = parseEventImages(e);
+      let cover_image = e.cover_image;
+      if (!cover_image && gallery_images.length > 0) {
+        cover_image = gallery_images[0];
+      }
+      return {
+        ...e,
+        cover_image: cover_image || null,
+        gallery_images: gallery_images
+      };
+    });
+    
+    res.json(mapped);
   } catch (error) {
     console.error('Error fetching events:', error);
     res.status(500).json({ error: 'Failed to fetch events' });
@@ -236,7 +305,19 @@ router.get('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Event not found' });
     }
-    res.json(result.rows[0]);
+    
+    const e = result.rows[0];
+    const gallery_images = parseEventImages(e);
+    let cover_image = e.cover_image;
+    if (!cover_image && gallery_images.length > 0) {
+      cover_image = gallery_images[0];
+    }
+    
+    res.json({
+      ...e,
+      cover_image: cover_image || null,
+      gallery_images: gallery_images
+    });
   } catch (error) {
     console.error('Error fetching event:', error);
     res.status(500).json({ error: 'Failed to fetch event' });
@@ -259,15 +340,21 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
       gallery_images, space_id, organizer_id, drink_option, drink_price
     } = req.body;
 
-    // Update basic fields first
+    // Ensure gallery_images is properly formatted for images field
+    let imagesValue = [];
+    if (gallery_images) {
+      imagesValue = Array.isArray(gallery_images) ? gallery_images : (typeof gallery_images === 'string' ? JSON.parse(gallery_images) : []);
+    }
+    
+    // Update basic fields first, including images
     const basicResult = await pool.query(
       `UPDATE events 
        SET title = $1, description = $2, event_date = $3, duration_hours = $4, 
            max_participants = $5, price = $6, space_id = $7, organizer_id = $8,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $9
+           images = $9, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $10
        RETURNING *`,
-      [title, description, event_date, duration_hours, max_participants, price, space_id, organizer_id, id]
+      [title, description, event_date, duration_hours, max_participants, price, space_id, organizer_id, JSON.stringify(imagesValue), id]
     );
 
     if (basicResult.rows.length === 0) {
@@ -349,8 +436,21 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
     
     // Get final event data
     const finalResult = await pool.query('SELECT * FROM events WHERE id = $1', [id]);
-    console.log('✅ Debug - Event updated successfully:', finalResult.rows[0]);
-    res.json(finalResult.rows[0]);
+    const e = finalResult.rows[0];
+    const gallery_images = parseEventImages(e);
+    let cover_image = e.cover_image;
+    if (!cover_image && gallery_images.length > 0) {
+      cover_image = gallery_images[0];
+    }
+    
+    const formattedEvent = {
+      ...e,
+      cover_image: cover_image || null,
+      gallery_images: gallery_images
+    };
+    
+    console.log('✅ Debug - Event updated successfully:', formattedEvent);
+    res.json(formattedEvent);
   } catch (error) {
     console.error('❌ Error updating event:', error);
     res.status(500).json({ error: 'Failed to update event: ' + error.message });
@@ -506,14 +606,15 @@ router.post('/spaces', authenticateToken, requireAdmin, async (req, res) => {
       price_per_hour,
       amenities,
       images,
-      owner_id
+      owner_id,
+      google_maps_url
     } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status, verified)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved', true)
+      `INSERT INTO spaces (name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, status, verified, google_maps_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved', true, $10)
        RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenities, images, owner_id]
+      [name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, google_maps_url || null]
     );
 
     res.status(201).json(result.rows[0]);
@@ -538,7 +639,8 @@ router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
       images,
       owner_id,
       status,
-      verified
+      verified,
+      google_maps_url
     } = req.body;
 
     // Get current space to preserve status if not provided
@@ -555,10 +657,10 @@ router.put('/spaces/:id', authenticateToken, requireAdmin, async (req, res) => {
       `UPDATE spaces 
        SET name = $1, description = $2, address = $3, city = $4, capacity = $5,
            price_per_hour = $6, amenities = $7, images = $8, owner_id = $9,
-           status = $10, verified = $11, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $12
+           status = $10, verified = $11, google_maps_url = $12, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $13
        RETURNING *`,
-      [name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, finalStatus, finalVerified, id]
+      [name, description, address, city, capacity, price_per_hour, amenities, images, owner_id, finalStatus, finalVerified, google_maps_url || null, id]
     );
 
     if (result.rows.length === 0) {
