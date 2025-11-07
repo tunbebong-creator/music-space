@@ -423,7 +423,7 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
       video_url || null,
       audio_preview || null,
       cover_image || null,
-      gallery_images || null,
+      (gallery_images && Array.isArray(gallery_images)) ? gallery_images : (gallery_images ? (typeof gallery_images === 'string' ? JSON.parse(gallery_images) : []) : null),
       id
     ];
     
@@ -431,7 +431,9 @@ router.put('/events/:id', authenticateToken, requireAdmin, async (req, res) => {
       await pool.query(updateQuery, updateValues);
       console.log('✅ Debug - Event updated with additional fields');
     } catch (updateError) {
-      console.log('⚠️ Debug - Some additional fields could not be updated:', updateError.message);
+      console.error('⚠️ Debug - Some additional fields could not be updated:', updateError.message);
+      console.error('⚠️ Update error details:', updateError);
+      throw updateError; // Re-throw to be caught by outer catch
     }
     
     // Get final event data
