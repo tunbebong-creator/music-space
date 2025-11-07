@@ -218,16 +218,16 @@ router.post('/events', authenticateToken, requireAdmin, async (req, res) => {
     // Get final event data
     const finalResult = await pool.query('SELECT * FROM events WHERE id = $1', [eventId]);
     const e = finalResult.rows[0];
-    const gallery_images = parseEventImages(e);
+    const parsedGalleryImages = parseEventImages(e);
     let cover_image = e.cover_image;
-    if (!cover_image && gallery_images.length > 0) {
-      cover_image = gallery_images[0];
+    if (!cover_image && parsedGalleryImages.length > 0) {
+      cover_image = parsedGalleryImages[0];
     }
     
     const formattedEvent = {
       ...e,
       cover_image: cover_image || null,
-      gallery_images: gallery_images
+      gallery_images: parsedGalleryImages
     };
     
     console.log('✅ Debug - Event created successfully:', formattedEvent);
