@@ -63,8 +63,8 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-// Handle preflight requests explicitly - Express 5 doesn't support '*' wildcard
-app.options('/*', cors());
+// Handle preflight requests - Express 5 handles this automatically with cors middleware
+// No need for explicit app.options() - cors() middleware already handles OPTIONS requests
 app.use(express.json());
 
 // Serve static files from uploads directory (use absolute path for reliability)
