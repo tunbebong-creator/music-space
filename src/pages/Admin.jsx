@@ -48,6 +48,8 @@ export default function Admin() {
   const [filterStatus, setFilterStatus] = React.useState("");
   const [usersPage, setUsersPage] = React.useState(1);
   const [usersPerPage, setUsersPerPage] = React.useState(10);
+  const [bookingsPage, setBookingsPage] = React.useState(1);
+  const [bookingsPerPage, setBookingsPerPage] = React.useState(10);
   const [showAddSpaceModal, setShowAddSpaceModal] = React.useState(false);
   const [showAddEventModal, setShowAddEventModal] = React.useState(false);
   const [editingSpace, setEditingSpace] = React.useState(null);
@@ -271,6 +273,11 @@ export default function Admin() {
     setUsersPage(1);
   }, [searchTerm, filterRole]);
 
+  // Reset bookings page when filter changes
+  React.useEffect(() => {
+    setBookingsPage(1);
+  }, [filterStatus]);
+
   const { data: spacesData, isLoading: spacesLoading, refetch: refetchSpaces, error: spacesError } = useQuery({
     queryKey: ['admin-spaces', searchTerm, filterStatus],
     queryFn: () => {
@@ -302,8 +309,8 @@ export default function Admin() {
   });
 
   const { data: bookingsData, isLoading: bookingsLoading, refetch: refetchBookings } = useQuery({
-    queryKey: ['admin-bookings', filterStatus],
-    queryFn: () => fetchWithAuth(`/api/admin/bookings?status=${filterStatus}`),
+    queryKey: ['admin-bookings', filterStatus, bookingsPage, bookingsPerPage],
+    queryFn: () => fetchWithAuth(`/api/admin/bookings?status=${filterStatus}&page=${bookingsPage}&limit=${bookingsPerPage}`),
     enabled: !!user && user.role === 'admin' && activeTab === 'bookings',
   });
 
@@ -1603,6 +1610,22 @@ export default function Admin() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              )}
+              
+              {/* Pagination */}
+              {bookingsData?.pagination && bookingsData.pagination.pages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="text-sm text-gray-600">
+                      Hiển thị {((bookingsPage - 1) * bookingsPerPage) + 1} - {Math.min(bookingsPage * bookingsPerPage, bookingsData.pagination.total)} trong tổng số {bookingsData.pagination.total} bookings
+                    </div>
+                    <Pagination
+                      currentPage={bookingsPage}
+                      totalPages={bookingsData.pagination.pages}
+                      onPageChange={setBookingsPage}
+                    />
+                  </div>
                 </div>
               )}
             </div>
