@@ -17,6 +17,7 @@ import {
   Clock,
   Ticket
 } from "lucide-react";
+import { API_BASE_URL, API_UPLOAD_BASE } from '@/config/api.js';
 
 export default function AddEvent() {
   const navigate = useNavigate();
@@ -26,9 +27,9 @@ export default function AddEvent() {
   const [eventImages, setEventImages] = React.useState([]);
   const buildImageUrl = (url) => {
     if (!url) return null;
-    if (url.startsWith('http://localhost:3001/uploads')) return url;
-    if (url.startsWith('/uploads/')) return `http://localhost:3001${url}`;
-    return `http://localhost:3001/uploads/events/${url}`;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/uploads/')) return `${API_UPLOAD_BASE}${url}`;
+    return `${API_UPLOAD_BASE}/uploads/events/${url}`;
   };
   const [drinkItems, setDrinkItems] = React.useState([]);
   const [endTime, setEndTime] = React.useState('');
@@ -53,6 +54,35 @@ export default function AddEvent() {
   });
 
 
+  // API helper function
+  const API_BASE = API_BASE_URL.replace('/api', '');
+  
+  const fetchWithAuth = async (url, options = {}) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+      const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+      
+      console.log('🔍 Debug - Fetching URL:', fullUrl);
+      console.log('🔍 Debug - Has token:', !!token);
+      
+      const response = await fetch(fullUrl, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+          ...options.headers,
+        },
+      });
+      
+      console.log('🔍 Debug - Response status:', response.status);
+      
+      return response;
+    } catch (error) {
+      console.error('❌ API request failed:', error);
+      throw error;
+    }
+  };
+
   // Upload image function
   const uploadImage = async (file, type = 'events') => {
     try {
@@ -60,8 +90,12 @@ export default function AddEvent() {
       formData.append('image', file);
       formData.append('type', type);
       
-      const response = await fetch('http://localhost:3001/api/upload', {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
+      const response = await fetch(`${API_BASE}/api/upload`, {
         method: 'POST',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         body: formData
       });
       
@@ -150,18 +184,24 @@ export default function AddEvent() {
 
       // Ensure admin token exists; if not, fetch a dev admin token
       const ensureAdminToken = async (forceRefresh = false) => {
-        let token = localStorage.getItem('adminToken');
+        let token = localStorage.getItem('auth_token') || localStorage.getItem('adminToken');
         if (!token || forceRefresh) {
           try {
-            const tRes = await fetch('http://localhost:3001/api/generate-admin-token', { method: 'POST' });
+            const tRes = await fetch(`${API_BASE}/api/generate-admin-token`, { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
             if (tRes.ok) {
               const tData = await tRes.json();
               token = tData.token;
+              localStorage.setItem('auth_token', token);
               localStorage.setItem('adminToken', token);
               // Optionally persist user
               localStorage.setItem('user_data', JSON.stringify(tData.user || { role: 'admin' }));
             }
-          } catch (_) {}
+          } catch (error) {
+            console.error('Error generating admin token:', error);
+          }
         }
         return token;
       };
@@ -195,14 +235,16 @@ export default function AddEvent() {
       console.log('🔍 Debug - Token:', token);
       console.log('🔍 Debug - Event data:', eventData);
       
-      const submit = async (jwt) => fetch('http://localhost:3001/api/admin/events', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${jwt}`
-        },
-        body: JSON.stringify(eventData)
-      });
+      const submit = async (jwt) => {
+        return await fetchWithAuth('/api/admin/events', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${jwt}`
+          },
+          body: JSON.stringify(eventData)
+        });
+      };
+      
       let response = await submit(token);
       
       console.log('🔍 Debug - Response status:', response.status);
