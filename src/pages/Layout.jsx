@@ -4,9 +4,13 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { customAPI as base44 } from "@/api/customClient";
-import { FileText, Heart, User, Menu, X, Phone, Mail, Facebook, MapPin, Calendar, Sparkles, LogIn, ChevronDown } from "lucide-react";
+import { FileText, Heart, User, Menu, X, Phone, Mail, Facebook, MapPin, Calendar, Sparkles, LogIn, ChevronDown, Bell, BellOff, Download, WifiOff } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import ModernAuthModal from "@/components/ModernAuthModal";
+import { useRegisterSW } from 'virtual:pwa-register/react';
+import { usePushNotification } from '@/hooks/usePushNotification';
+import OfflineFallback from '@/components/OfflineFallback';
+
 
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();
@@ -16,6 +20,58 @@ export default function Layout({ children, currentPageName }) {
   const [authModalOpen, setAuthModalOpen] = React.useState(false);
   const [consultDropdownOpen, setConsultDropdownOpen] = React.useState(false);
   const { scrollYProgress } = useScroll();
+
+  // PWA Update Hook
+  const {
+    offlineReady: [offlineReady, setOfflineReady],
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW();
+
+  // Push Notification Hook
+  const {
+    isSupported: isPushSupported,
+    isSubscribed: isPushSubscribed,
+    subscribe: subscribePush,
+    unsubscribe: unsubscribePush,
+    sendTestNotification,
+    isLoading: isPushLoading
+  } = usePushNotification();
+
+  // Connection State
+  const [isOnline, setIsOnline] = React.useState(navigator.onLine);
+
+  // Install PWA Prompt State
+  const [installPrompt, setInstallPrompt] = React.useState(null);
+
+  React.useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   // Parallax cloud movements
   const cloudY1 = useTransform(scrollYProgress, [0, 1], [0, 200]);
@@ -423,6 +479,48 @@ export default function Layout({ children, currentPageName }) {
                 </Link>
               )}
 
+              {installPrompt && (
+                <button
+                  onClick={handleInstallClick}
+                  className="px-4 py-2 rounded-full bg-blue-50 text-[#4A90E2] border border-[#B8D8F0]/30 text-sm font-medium hover:bg-blue-100 transition-all flex items-center gap-2 shadow-sm animate-pulse"
+                >
+                  <Download className="w-4 h-4" />
+                  Cài đặt App
+                </button>
+              )}
+
+              {isPushSupported && user && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={isPushSubscribed ? unsubscribePush : subscribePush}
+                    disabled={isPushLoading}
+                    className={`p-2 rounded-full transition-colors flex items-center justify-center ${
+                      isPushSubscribed 
+                        ? 'bg-blue-50 text-[#4A90E2] hover:bg-blue-100' 
+                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                    }`}
+                    title={isPushSubscribed ? 'Hủy nhận thông báo' : 'Bật nhận thông báo'}
+                  >
+                    {isPushSubscribed ? <Bell className="w-4.5 h-4.5 text-yellow-500 animate-bounce" style={{animationDuration: '3s'}} /> : <BellOff className="w-4.5 h-4.5" />}
+                  </button>
+                  {isPushSubscribed && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await sendTestNotification();
+                        } catch (err) {
+                          alert('Lỗi gửi thông báo: ' + err.message);
+                        }
+                      }}
+                      className="px-2.5 py-1 text-[11px] rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium transition-colors"
+                      title="Gửi thử thông báo push đến thiết bị này"
+                    >
+                      Test Push
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Show user info and logout when logged in */}
               {user && (
                 <>
@@ -509,7 +607,7 @@ export default function Layout({ children, currentPageName }) {
       </nav>
 
       <main className="pt-24 relative z-10">
-        {children}
+        {isOnline ? children : <OfflineFallback />}
       </main>
 
       {/* Footer */}
@@ -699,6 +797,45 @@ export default function Layout({ children, currentPageName }) {
         onClose={() => setAuthModalOpen(false)} 
         onSuccess={handleAuthSuccess} 
       />
+
+      {/* PWA Auto-Update Banner */}
+      {needRefresh && (
+        <div className="fixed bottom-4 left-4 z-50 bg-[#0f172a]/95 backdrop-blur-md text-white p-5 rounded-2xl shadow-2xl border border-slate-700 max-w-sm flex flex-col gap-3 animate-fade-in-up">
+          <div>
+            <p className="font-bold text-sm text-[#4A90E2] flex items-center gap-2">
+              ✨ Phiên bản mới đã sẵn sàng!
+            </p>
+            <p className="text-xs text-gray-300 mt-1">
+              Ứng dụng đã có bản cập nhật mới. Vui lòng tải lại trang để trải nghiệm đầy đủ các tính năng mới nhất.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => updateServiceWorker(true)}
+              className="px-3.5 py-2 bg-gradient-to-r from-[#4A90E2] to-[#7BB3E8] text-white text-xs font-semibold rounded-xl hover:shadow-lg transition-all"
+            >
+              Cập nhật ngay
+            </button>
+            <button
+              onClick={() => setNeedRefresh(false)}
+              className="px-3.5 py-2 bg-slate-800 text-gray-300 text-xs font-medium rounded-xl hover:bg-slate-700 transition-colors"
+            >
+              Bỏ qua
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Offline Badge */}
+      {!isOnline && (
+        <div className="fixed bottom-4 right-4 z-50 bg-amber-500/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-amber-400 animate-bounce">
+          <WifiOff className="w-5 h-5 text-white" />
+          <div className="text-xs">
+            <p className="font-bold">Đang ngoại tuyến</p>
+            <p className="opacity-80">Một số dữ liệu có thể đã cũ</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

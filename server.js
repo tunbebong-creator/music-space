@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import webpush from 'web-push';
 import adminRoutes from './server/routes/admin.js';
 import uploadRoutes from './server/routes/upload.js';
 import { uploadMultipleImages, uploadSingleImage, handleUploadError, deleteFile, getFileUrl } from './server/middleware/upload.js';
@@ -29,6 +30,28 @@ console.log('SMTP_PASS:', process.env.SMTP_PASS ? '(đã tồn tại)' : '(khôn
 console.log('SMTP_FROM:', process.env.SMTP_FROM);
 console.log('SITE_NAME:', process.env.SITE_NAME);
 console.log('================================================');
+
+// Web Push Configuration & VAPID keys bootstrapping
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (!vapidPublicKey || !vapidPrivateKey) {
+  console.log('🔑 VAPID Keys not found in environment. Generating temporary keys...');
+  const keys = webpush.generateVAPIDKeys();
+  vapidPublicKey = keys.publicKey;
+  vapidPrivateKey = keys.privateKey;
+  console.log('==================================================');
+  console.log('👉 GENERATED VAPID KEYS (Save these to your .env):');
+  console.log(`VAPID_PUBLIC_KEY=${vapidPublicKey}`);
+  console.log(`VAPID_PRIVATE_KEY=${vapidPrivateKey}`);
+  console.log('==================================================');
+}
+
+webpush.setVapidDetails(
+  'mailto:support@musicspace.edu.vn',
+  vapidPublicKey,
+  vapidPrivateKey
+);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -481,6 +504,23 @@ pool.on('error', (err) => {
   } catch (e) {
     console.warn('⚠️ Could not ensure notifications table:', e.message);
   }
+
+  // Ensure push_subscriptions table exists
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        endpoint TEXT UNIQUE NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('✅ Push subscriptions table ensured.');
+  } catch (e) {
+    console.warn('⚠️ Could not ensure push_subscriptions table:', e.message);
+  }
   
   // Ensure page_views table exists for tracking
   try {
@@ -581,6 +621,100 @@ app.get('/api/health', async (req, res) => {
       message: 'Database connection failed',
       error: error.message
     });
+  }
+});
+
+// Web Push Notification Endpoints
+app.get('/api/notifications/vapid-key', (req, res) => {
+  res.json({ publicKey: vapidPublicKey });
+});
+
+app.post('/api/notifications/subscribe', async (req, res) => {
+  try {
+    const subscription = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      return res.status(400).json({ error: 'Subscription data invalid' });
+    }
+
+    // Optional authentication check
+    let userId = null;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        userId = decoded.id;
+      } catch (err) {
+        console.log('Optional token verify failed in subscription:', err.message);
+      }
+    }
+
+    const { endpoint, keys } = subscription;
+    const { p256dh, auth } = keys;
+
+    // Insert or update subscription
+    await pool.query(`
+      INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (endpoint) 
+      DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, created_at = CURRENT_TIMESTAMP
+    `, [userId, endpoint, p256dh, auth]);
+
+    res.status(201).json({ message: 'Subscribed successfully' });
+  } catch (error) {
+    console.error('Subscription error:', error);
+    res.status(500).json({ error: 'Failed to subscribe' });
+  }
+});
+
+app.post('/api/notifications/unsubscribe', async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) {
+      return res.status(400).json({ error: 'Endpoint required' });
+    }
+
+    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+    res.json({ message: 'Unsubscribed successfully' });
+  } catch (error) {
+    console.error('Unsubscription error:', error);
+    res.status(500).json({ error: 'Failed to unsubscribe' });
+  }
+});
+
+app.post('/api/notifications/test', async (req, res) => {
+  try {
+    const { endpoint, title, body, url } = req.body;
+    if (!endpoint) {
+      return res.status(400).json({ error: 'Endpoint is required' });
+    }
+
+    // Retrieve subscription details from DB
+    const result = await pool.query('SELECT * FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Subscription not found' });
+    }
+
+    const sub = result.rows[0];
+    const pushSubscription = {
+      endpoint: sub.endpoint,
+      keys: {
+        p256dh: sub.p256dh,
+        auth: sub.auth
+      }
+    };
+
+    const payload = JSON.stringify({
+      title: title || 'Music Space Test',
+      body: body || 'Test push notification content!',
+      url: url || '/'
+    });
+
+    await webpush.sendNotification(pushSubscription, payload);
+    res.json({ success: true, message: 'Test notification sent' });
+  } catch (error) {
+    console.error('Send push error:', error);
+    res.status(500).json({ error: 'Failed to send notification', details: error.message });
   }
 });
 
